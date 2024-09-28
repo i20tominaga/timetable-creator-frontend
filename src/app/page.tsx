@@ -4,6 +4,17 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Clock, Edit, Plus, Trash } from "lucide-react";
 import { useState, useEffect } from "react";
 import axios from 'axios';
@@ -18,29 +29,27 @@ type Timetable = {
 
 export default function TimetableDashboard() {
   const [newTimetableName, setNewTimetableName] = useState("");
-  const [timetables, setTimetables] = useState<Timetable[]>([]);  // Timetable型を指定  // Timetable型を指定
+  const [timetables, setTimetables] = useState<Timetable[]>([]);
+  const [selectedTimetableId, setSelectedTimetableId] = useState<string | null>(null);
+  const [isDeleteAll, setIsDeleteAll] = useState(false);
 
-  // APIから時間割データを取得する関数
   const fetchTimetables = async () => {
     try {
       const response = await axios.get('http://localhost:3001/api/timetable/getAll');
-      setTimetables(response.data.TimeTables);  // レスポンスからTimeTables配列を取得
+      setTimetables(response.data.TimeTables);
     } catch (error) {
       console.error('Error fetching timetables:', error);
     }
   };
 
-  // コンポーネントが初めてレンダリングされたときにAPIを呼び出す
   useEffect(() => {
     fetchTimetables();
   }, []);
 
   const createTimetable = async () => {
     try {
-      // POSTリクエストで新しい時間割を作成
       const response = await axios.post(`http://localhost:3001/api/timetable/create/${encodeURIComponent(newTimetableName)}`);
       const newTimetable = response.data;
-      alert("新しい時間割が作成されました！");
       setTimetables((prevTimetables) => [...(prevTimetables || []), newTimetable]);
     } catch (error) {
       console.error("Error creating timetable:", error);
@@ -49,19 +58,22 @@ export default function TimetableDashboard() {
   };
 
   const deleteTimetable = async (id: string) => {
-    // 確認ダイアログを表示し、ユーザーがOKを押した場合のみ削除処理を実行
-    const confirmDelete = window.confirm("本当にこの時間割を削除してもよろしいですか？");
-    if (confirmDelete) {
-      try {
-        await axios.delete(`http://localhost:3001/api/timetable/delete/${encodeURIComponent(id)}`);
-        setTimetables(timetables.filter((timetable) => timetable.id !== id));
-        alert("時間割が削除されました！");
-      } catch (error) {
-        console.error("Error deleting timetable:", error);
-        alert("時間割の削除に失敗しました。");
-      }
-    } else {
-      alert("削除がキャンセルされました。");
+    try {
+      await axios.delete(`http://localhost:3001/api/timetable/delete/${encodeURIComponent(id)}`);
+      setTimetables(timetables.filter((timetable) => timetable.id !== id));
+    } catch (error) {
+      console.error("Error deleting timetable:", error);
+      alert("時間割の削除に失敗しました。");
+    }
+  };
+
+  const deleteAllTimetable = async () => {
+    try {
+      await axios.delete(`http://localhost:3001/api/timetable/deleteAll`);
+      setTimetables([]);
+    } catch (error) {
+      console.error("Error deleting all timetables:", error);
+      alert("全ての時間割の削除に失敗しました。");
     }
   };
 
@@ -77,32 +89,66 @@ export default function TimetableDashboard() {
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-3xl font-bold tracking-tight">Your Timetables</h2>
-              <div className="flex items-center">
-                <Input
-                  className="mr-2"
-                  placeholder="New Timetable Name"
-                  value={newTimetableName}
-                  onChange={(e) => setNewTimetableName(e.target.value)}
-                />
-                <Button onClick={createTimetable}>
+            </div>
+
+            {/* テキストエリア（Input）をボタンの上に配置 */}
+            <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+              <Input
+                className="flex-grow"
+                placeholder="New Timetable Name"
+                value={newTimetableName}
+                onChange={(e) => setNewTimetableName(e.target.value)}
+              />
+              <div className="flex space-x-4">
+                {/* CreateボタンとDelete Allボタンの大きさを揃える */}
+                <Button className="w-40" onClick={createTimetable}>
                   <Plus className="w-4 h-4 mr-2" />
                   Create New Timetable
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button className="w-40" variant="destructive" onClick={() => setIsDeleteAll(true)}>
+                      <Trash className="w-4 h-4 mr-2" />
+                      Delete All Timetables
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>全ての時間割を削除</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        本当に全ての時間割を削除してもよろしいですか？この操作は元に戻せません。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          if (isDeleteAll) {
+                            deleteAllTimetable();
+                            setIsDeleteAll(false);
+                          }
+                        }}
+                      >
+                        削除
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
 
             {/* APIから取得した時間割データを表示 */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {timetables.length > 0 ? (
+              {Array.isArray(timetables) && timetables.length > 0 ? (
                 timetables.map((timetable: Timetable) => (
-                  <Card key={timetable.id}>  {/* idをkeyに指定 */}
+                  <Card key={timetable.id}>
                     <CardHeader>
-                      <CardTitle>{timetable.id}</CardTitle>  {/* idを表示 */}
+                      <CardTitle>{timetable.id}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center text-sm text-muted-foreground">
                         <Clock className="w-4 h-4 mr-1" />
-                        <span>{timetable.file}</span> {/* ファイルパスも表示 */}
+                        <span>{timetable.file}</span>
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-between">
@@ -110,15 +156,39 @@ export default function TimetableDashboard() {
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => deleteTimetable(timetable.id)}>
-                        <Trash className="w-4 h-4 mr-2" />
-                        Delete
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm" onClick={() => setSelectedTimetableId(timetable.id)}>
+                            <Trash className="w-4 h-4 mr-2" />
+                            Delete
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>削除の確認</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              本当にこの時間割を削除してもよろしいですか？この操作は元に戻せません。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                if (selectedTimetableId) {
+                                  deleteTimetable(selectedTimetableId);
+                                }
+                              }}
+                            >
+                              削除
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </CardFooter>
                   </Card>
                 ))
               ) : (
-                <p>No timetables available.</p>  // データがない場合のメッセージ
+                <p>No timetables available.</p>
               )}
             </div>
           </div>

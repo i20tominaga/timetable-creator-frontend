@@ -1,4 +1,4 @@
-"use client"; // クライアントコンポーネントとしてマーク
+"use client";
 
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
@@ -15,65 +15,97 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { toast, Toaster } from "react-hot-toast"; // Import from react-hot-toast
 import { Clock, Edit, Plus, Trash } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from 'axios';
 import Head from 'next/head';
 
-// Timetable型の定義
-type Timetable = {
+// interface TimetableListに変更
+interface TimetableList {
   id: string;
   name: string;
   file: string;
-};
+}
 
 export default function TimetableDashboard() {
   const [newTimetableName, setNewTimetableName] = useState("");
-  const [timetables, setTimetables] = useState<Timetable[]>([]);
+  const [timetables, setTimetables] = useState<TimetableList[]>([]);
   const [selectedTimetableId, setSelectedTimetableId] = useState<string | null>(null);
   const [isDeleteAll, setIsDeleteAll] = useState(false);
+  const [loading, setLoading] = useState(false); // ローディング状態
+  const [error, setError] = useState<string | null>(null); // エラーメッセージ
 
-  const fetchTimetables = async () => {
+  // fetchTimetablesをuseCallbackでメモ化する
+  const fetchTimetables = useCallback(async () => {
+    setLoading(true); // ローディング開始
     try {
       const response = await axios.get('http://localhost:3001/api/timetable/getAll');
       setTimetables(response.data.TimeTables);
+      toast.success("時間割が正常に取得されました。");
     } catch (error) {
       console.error('Error fetching timetables:', error);
+      setError("時間割の取得に失敗しました。");
+      toast.error("時間割の取得に失敗しました。");
+    } finally {
+      setLoading(false); // ローディング終了
     }
-  };
-
-  useEffect(() => {
-    fetchTimetables();
   }, []);
 
+  // fetchTimetablesが変更されないように依存配列に含める
+  useEffect(() => {
+    fetchTimetables();
+  }, [fetchTimetables]);
+
   const createTimetable = async () => {
+    if (!newTimetableName.trim()) {
+      toast.error("時間割名を入力してください。");
+      return;
+    }
+
+    setLoading(true); // ローディング開始
     try {
       const response = await axios.post(`http://localhost:3001/api/timetable/create/${encodeURIComponent(newTimetableName)}`);
       const newTimetable = response.data;
       setTimetables((prevTimetables) => [...(prevTimetables || []), newTimetable]);
+      setNewTimetableName(""); // 入力フィールドをクリア
+      toast.success("時間割が作成されました。");
     } catch (error) {
       console.error("Error creating timetable:", error);
-      alert("時間割の作成に失敗しました。");
+      setError("時間割の作成に失敗しました。");
+      toast.error("時間割の作成に失敗しました。");
+    } finally {
+      setLoading(false); // ローディング終了
     }
   };
 
   const deleteTimetable = async (id: string) => {
+    setLoading(true); // ローディング開始
     try {
       await axios.delete(`http://localhost:3001/api/timetable/delete/${encodeURIComponent(id)}`);
       setTimetables(timetables.filter((timetable) => timetable.id !== id));
+      toast.success("時間割が削除されました。");
     } catch (error) {
       console.error("Error deleting timetable:", error);
-      alert("時間割の削除に失敗しました。");
+      setError("時間割の削除に失敗しました。");
+      toast.error("時間割の削除に失敗しました。");
+    } finally {
+      setLoading(false); // ローディング終了
     }
   };
 
   const deleteAllTimetable = async () => {
+    setLoading(true); // ローディング開始
     try {
       await axios.delete(`http://localhost:3001/api/timetable/deleteAll`);
       setTimetables([]);
+      toast.success("全ての時間割が削除されました。");
     } catch (error) {
       console.error("Error deleting all timetables:", error);
-      alert("全ての時間割の削除に失敗しました。");
+      setError("全ての時間割の削除に失敗しました。");
+      toast.error("全ての時間割の削除に失敗しました。");
+    } finally {
+      setLoading(false); // ローディング終了
     }
   };
 
@@ -101,15 +133,13 @@ export default function TimetableDashboard() {
               />
               <div className="flex space-x-4">
                 {/* CreateボタンとDelete Allボタンの大きさを揃える */}
-                <Button className="w-40" onClick={createTimetable}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create New Timetable
+                <Button className="w-40" onClick={createTimetable} disabled={loading}>
+                  {loading ? "Creating..." : <><Plus className="w-4 h-4 mr-2" /> Create New Timetable</>}
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button className="w-40" variant="destructive" onClick={() => setIsDeleteAll(true)}>
-                      <Trash className="w-4 h-4 mr-2" />
-                      Delete All Timetables
+                    <Button className="w-40" variant="destructive" onClick={() => setIsDeleteAll(true)} disabled={loading}>
+                      {loading ? "Deleting..." : <><Trash className="w-4 h-4 mr-2" /> Delete All Timetables</>}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -137,10 +167,13 @@ export default function TimetableDashboard() {
               </div>
             </div>
 
+            {/* エラーメッセージの表示 */}
+            {error && <div className="text-red-500">{error}</div>}
+
             {/* APIから取得した時間割データを表示 */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {Array.isArray(timetables) && timetables.length > 0 ? (
-                timetables.map((timetable: Timetable) => (
+                timetables.map((timetable: TimetableList) => (
                   <Card key={timetable.id}>
                     <CardHeader>
                       <CardTitle>{timetable.id}</CardTitle>
@@ -167,7 +200,7 @@ export default function TimetableDashboard() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>削除の確認</AlertDialogTitle>
                             <AlertDialogDescription>
-                              本当にこの時間割を削除してもよろしいですか？この操作は元に戻せません。
+                              本当にこの時間割を削除してもよろしいですか？
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -176,6 +209,7 @@ export default function TimetableDashboard() {
                               onClick={() => {
                                 if (selectedTimetableId) {
                                   deleteTimetable(selectedTimetableId);
+                                  setSelectedTimetableId(null);
                                 }
                               }}
                             >
@@ -188,12 +222,13 @@ export default function TimetableDashboard() {
                   </Card>
                 ))
               ) : (
-                <p>No timetables available.</p>
+                <div className="text-center text-gray-500">作成した時間割がありません．</div>
               )}
             </div>
           </div>
         </main>
       </div>
+      <Toaster /> {/* Toasterを追加 */}
     </div>
   );
 }

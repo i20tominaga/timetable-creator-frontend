@@ -20,7 +20,7 @@ import { Clock, Edit, Plus, Trash } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import axios from 'axios';
 import Head from 'next/head';
-
+import { useRouter } from 'next/navigation';
 // interface TimetableListに変更
 interface TimetableList {
   id: string;
@@ -35,6 +35,12 @@ export default function TimetableDashboard() {
   const [isDeleteAll, setIsDeleteAll] = useState(false);
   const [loading, setLoading] = useState(false); // ローディング状態
   const [error, setError] = useState<string | null>(null); // エラーメッセージ
+
+  const router = useRouter();
+
+  const handleEdit = (id: string) => {
+    router.push(`/edit?id=${id}`);
+  }
 
   // fetchTimetablesをuseCallbackでメモ化する
   const fetchTimetables = useCallback(async () => {
@@ -185,7 +191,7 @@ export default function TimetableDashboard() {
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-between">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(timetable.id)}>
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
                       </Button>

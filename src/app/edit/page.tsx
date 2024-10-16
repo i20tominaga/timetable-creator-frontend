@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
@@ -98,7 +98,6 @@ const EditTimetable = () => {
             days.forEach(day => {
                 day.Classes.forEach(classEntry => {
                     const { periods, Targets } = classEntry;
-                    console.log(`Class Entry for ${Targets}: Period ${periods.period}`);  // periodのデバッグ出力
                     Targets.forEach(target => {
                         if (timetableByClasses[target]) {
                             timetableByClasses[target][day.Day][periods.period] = classEntry;  // 0ベースのperiodをそのまま使用
@@ -205,4 +204,11 @@ const EditTimetable = () => {
     );
 };
 
-export default EditTimetable;
+// サスペンスでラップする部分
+export default function PageWrapper() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <EditTimetable />
+        </Suspense>
+    );
+}

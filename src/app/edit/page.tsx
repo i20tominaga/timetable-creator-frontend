@@ -25,30 +25,16 @@ import {
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from 'react-hot-toast';
-import Header from '@/components/Header';
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 import Head from 'next/head';
-
-interface Period {
-    period: number;
-    length: number;
-}
-
-interface ClassEntry {
-    Subject: string;
-    Instructors: string[];
-    Rooms: string[];
-    periods: Period;
-    Targets: string[];
-}
-
-interface TimetableDay {
-    Day: string;
-    Classes: ClassEntry[];
-}
-
-interface Timetable {
-    Days: TimetableDay[];
-}
+import Header from '@/components/Header';
+import {
+    ClassEntry,
+    TimetableDay,
+    Timetable,
+    DragItem
+} from '@/app/types';
 
 const EditTimetable = () => {
     const router = useRouter();
@@ -274,8 +260,10 @@ const EditTimetable = () => {
 // サスペンスでラップする部分
 export default function PageWrapper() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
-            <EditTimetable />
-        </Suspense>
+        <DndProvider backend={HTML5Backend}>
+            <Suspense fallback={<div>Loading...</div>}>
+                <EditTimetable />
+            </Suspense>
+        </DndProvider>
     );
 }

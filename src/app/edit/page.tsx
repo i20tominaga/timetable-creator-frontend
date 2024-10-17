@@ -5,6 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+    Dialog,
+    DialogTrigger,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter
+} from '@/components/ui/dialog';
 import {
     Table,
     TableBody,
@@ -12,11 +21,13 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
-import { ScrollArea } from '@/components/ui/scroll-area';
+} from "@/components/ui/table"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from 'react-hot-toast';
+import Header from '@/components/Header';
+import Head from 'next/head';
 
-// データの型を定義
 interface Period {
     period: number;
     length: number;
@@ -46,8 +57,10 @@ const EditTimetable = () => {
     const [timetable, setTimetable] = useState<Timetable | null>(null);
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(true);
+    const [selectedTeacher, setSelectedTeacher] = useState<string>("");  // Selected teacher
+    const [filterMode, setFilterMode] = useState<boolean>(false);  // Filter mode
 
-    // APIから時間割を取得
+    // Fetch timetable data
     useEffect(() => {
         const fetchTimetable = async () => {
             if (!id) return;
@@ -62,11 +75,10 @@ const EditTimetable = () => {
                 setLoading(false);
             }
         };
-
         fetchTimetable();
     }, [id]);
 
-    // 時間割の更新処理を定義
+    // Update timetable name
     const handleUpdate = async () => {
         try {
             await axios.put(`http://localhost:3001/api/timetable/update/${id}`, { name: newName });
@@ -78,49 +90,104 @@ const EditTimetable = () => {
         }
     };
 
-    // クラスに対応するデータを曜日ごとに分類
+    // Categorize data by classes
     const generateTimetableByClasses = (days: TimetableDay[] | undefined) => {
         const classLabels = ['ME1', 'IE1', 'CA1', 'ME2', 'IE2', 'CA2', 'ME3', 'IE3', 'CA3', 'ME4', 'IE4', 'CA4', 'ME5', 'IE5', 'CA5'];
         const timetableByClasses: { [key: string]: { [key: string]: (ClassEntry | null)[] } } = {};
-
-        // 各クラスの初期化（8コマのスペースを用意）
         classLabels.forEach(classLabel => {
             timetableByClasses[classLabel] = {
-                'Monday': Array(4).fill(null),  // periodが0〜3なので4コマ分のスペースを用意
+                'Monday': Array(4).fill(null),
                 'Tuesday': Array(4).fill(null),
                 'Wednesday': Array(4).fill(null),
                 'Thursday': Array(4).fill(null),
                 'Friday': Array(4).fill(null),
             };
         });
-
         if (days) {
             days.forEach(day => {
                 day.Classes.forEach(classEntry => {
                     const { periods, Targets } = classEntry;
                     Targets.forEach(target => {
                         if (timetableByClasses[target]) {
-                            timetableByClasses[target][day.Day][periods.period] = classEntry;  // 0ベースのperiodをそのまま使用
+                            timetableByClasses[target][day.Day][periods.period] = classEntry;
                         }
                     });
                 });
             });
         }
-
         return timetableByClasses;
     };
 
+    const handleTeacherChange = (value: string) => {
+        setSelectedTeacher(value);
+    };
+
+    const toggleFilterMode = () => {
+        setFilterMode(!filterMode);
+    };
+
+    const isHighlighted = (classEntry: ClassEntry) => {
+        return selectedTeacher && classEntry.Instructors.includes(selectedTeacher);
+    };
+    /*
+    const shouldDisplay = (classEntry: ClassEntry) => {
+        return !filterMode || !selectedTeacher || classEntry.Instructors.includes(selectedTeacher);
+    };
+    */
     if (loading) return <div>Loading...</div>;
 
     const timetableByClasses = timetable?.Days ? generateTimetableByClasses(timetable.Days) : {};
+    const allTeachers = timetable?.Days
+        .flatMap(day => day.Classes.flatMap(c => c.Instructors))
+        .filter((v, i, a) => a.indexOf(v) === i) || [];  // Get unique teachers
 
     return (
         <div>
-            <h1>時間割の編集</h1>
+            <Head>
+                <title>Edit Timetable</title>
+            </Head>
+            <Header />
             {timetable && (
-                <>
-                    <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="時間割名を編集" />
-                    <Button onClick={handleUpdate}>更新</Button>
+                <div style={{ padding: '30px' }}>
+                    <Dialog>
+                        <DialogTrigger asChild>
+                            <Button>時間割名を編集</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>時間割名の編集</DialogTitle>
+                            </DialogHeader>
+                            <Input
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                placeholder="新しい時間割名を入力"
+                                style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', border: '1px solid #ddd' }}
+                            />
+                            <DialogFooter>
+                                <Button onClick={handleUpdate}>更新</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Teacher selection and filter toggle */}
+                    <div className="flex items-center space-x-4 mb-4">
+                        <Select onValueChange={handleTeacherChange}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="先生を選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {allTeachers.map((teacher) => (
+                                    <SelectItem key={teacher} value={teacher}>
+                                        {teacher}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <div className="flex items-center space-x-2">
+                            <Switch id="filter-mode" checked={filterMode} onCheckedChange={toggleFilterMode} />
+                            <span>フィルターモード</span>
+                        </div>
+                    </div>
 
                     {/* Scrollable Table */}
                     <ScrollArea style={{ height: '80vh', width: '100%' }}>
@@ -128,15 +195,15 @@ const EditTimetable = () => {
                             borderCollapse: 'collapse',
                             width: '100%',
                             border: '2px solid #000',
-                            marginLeft: '20px',  // 左端のスペース
-                            marginRight: '20px'  // 右端のスペース
+                            marginLeft: '80px',  // 左端のスペース
+                            marginRight: '80px'  // 右端のスペース
                         }}>
                             <TableHeader>
                                 <TableRow style={{ borderBottom: '2px solid #000' }}>
                                     <TableHead style={{
                                         borderRight: '1px solid #000',
                                         borderBottom: '1px solid #000',
-                                        padding: '10px'
+                                        padding: '15px'
                                     }}>クラス</TableHead>
                                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
                                         <TableHead key={day} style={{
@@ -179,7 +246,7 @@ const EditTimetable = () => {
                                                                 width: '150px',
                                                                 height: 'auto',
                                                                 textAlign: 'center',
-                                                                backgroundColor: '#f9f9f9',
+                                                                backgroundColor: isHighlighted(entry) ? 'yellow' : '#f9f9f9',  // ハイライト
                                                                 overflowWrap: 'break-word',
                                                             }}>
                                                                 <div>{entry.Subject}</div>
@@ -198,7 +265,7 @@ const EditTimetable = () => {
                             </TableBody>
                         </Table>
                     </ScrollArea>
-                </>
+                </div>
             )}
         </div>
     );

@@ -187,7 +187,6 @@ export default function TimetableDashboard() {
                     <CardContent>
                       <div className="flex items-center text-sm text-muted-foreground">
                         <Clock className="w-4 h-4 mr-1" />
-                        <span>{timetable.file}</span>
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-between">

@@ -33,3 +33,20 @@ export interface DragItem {
     classLabel: string;
     day: string;
 }
+export interface DraggableClassEntryProps {
+    entry: ClassEntry;
+    index: number;
+    classLabel: string;
+    day: string;
+    isHighlighted: boolean;
+}
+
+export interface DroppableCellProps {
+    day: string;
+    classLabel: string;
+    periodIndex: number;
+    moveClass: (item: DragItem, targetDay: string, targetClassLabel: string, targetPeriodIndex: number) => void;
+    entry: ClassEntry | null;
+    isHighlighted: (entry: ClassEntry) => boolean;  // 関数でbooleanを返す
+    children?: React.ReactNode;
+}

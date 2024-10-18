@@ -2,7 +2,13 @@
 
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -21,7 +27,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from 'axios';
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
-import { TimetableList } from "@/app/types";
+import { TimetableList } from "@/components/types";
 
 export default function TimetableDashboard() {
   const [newTimetableName, setNewTimetableName] = useState("");

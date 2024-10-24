@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
+import _ from 'lodash';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card } from "@/components/ui/card";
 import {
     Dialog,
     DialogTrigger,
@@ -22,11 +24,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+// import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+// import { Switch } from "@/components/ui/switch";
 import { toast } from 'react-hot-toast';
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import Head from 'next/head';
 import Header from '@/components/Header';
 import {
@@ -35,6 +35,50 @@ import {
     Timetable
 } from '@/components/types';
 
+const ClassCard: React.FC<{
+    entry?: ClassEntry;
+    isSelected: boolean;
+    isEmpty: boolean;
+    onDoubleClick: () => void;
+}> = ({ entry, isSelected, isEmpty, onDoubleClick }) => {
+    return (
+        <Card
+            onDoubleClick={onDoubleClick}
+            className="cursor-pointer"
+            style={{
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                padding: '10px',
+                width: '250px',
+                height: 'auto',
+                textAlign: 'center',
+                backgroundColor: isSelected ? 'lightblue' : (isEmpty ? '#f0f0f0' : '#f9f9f9'),
+                overflowWrap: 'break-word',
+            }}
+            role="button"
+            aria-pressed={isSelected}
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onDoubleClick();
+                }
+            }}
+        >
+            {isEmpty ? (
+                <div className="text-gray-400">空きコマ</div>
+            ) : (
+                <>
+                    <div className="text-lg font-bold">{entry?.Subject}</div>
+                    <div className="text-sm mt-1">{entry?.Rooms.join(', ')}</div>
+                    <div className="text-sm mt-1">{entry?.Instructors.join(', ')}</div>
+                </>
+            )}
+        </Card>
+    );
+};
+
+
 const EditTimetable = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -42,9 +86,9 @@ const EditTimetable = () => {
     const [timetable, setTimetable] = useState<Timetable | null>(null);
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(true);
-    const [selectedTeacher, setSelectedTeacher] = useState<string>("");  // Selected teacher
-    const [filterMode, setFilterMode] = useState<boolean>(false);  // Filter mode
-
+    // const [selectedTeacher, setSelectedTeacher] = useState<string>("");  // 未使用の変数をコメントアウト
+    // const [filterMode, setFilterMode] = useState<boolean>(false);  // 未使用の変数をコメントアウト
+    const [selectedClass, setSelectedClass] = useState<{ day: string, classLabel: string, period: number } | null>(null);
     // Fetch timetable data
     useEffect(() => {
         const fetchTimetable = async () => {
@@ -52,6 +96,7 @@ const EditTimetable = () => {
             try {
                 const response = await axios.get(`http://localhost:3001/api/timetable/get/${id}`);
                 setTimetable(response.data);
+                console.log(response.data);
                 setNewName(response.data.name);
                 setLoading(false);
             } catch (error) {
@@ -62,6 +107,53 @@ const EditTimetable = () => {
         };
         fetchTimetable();
     }, [id]);
+
+    // Handle class selection and swapping
+    const handleClassDoubleClick = useCallback((day: string, classLabel: string, period: number | undefined) => {
+        if (period === undefined) return; // periodがundefinedの場合は何もしない
+
+        if (selectedClass === null) {
+            // 最初の授業を選択
+            setSelectedClass({ day, classLabel, period });
+        } else if (selectedClass.day === day && selectedClass.classLabel === classLabel && selectedClass.period === period) {
+            // 同じ授業を再度クリックした場合、選択解除
+            setSelectedClass(null);
+        } else {
+            // 授業をスワップ
+            setTimetable(prevTimetable => {
+                if (!prevTimetable) return prevTimetable;
+
+                const newTimetable = _.cloneDeep(prevTimetable);
+
+                const dayIndex1 = newTimetable.Days.findIndex(d => d.Day === selectedClass.day);
+                const dayIndex2 = newTimetable.Days.findIndex(d => d.Day === day);
+
+                if (dayIndex1 === -1 || dayIndex2 === -1) return prevTimetable;
+
+                const classIndex1 = newTimetable.Days[dayIndex1].Classes.findIndex(c => c.periods.period === selectedClass.period);
+                const classIndex2 = newTimetable.Days[dayIndex2].Classes.findIndex(c => c.periods.period === period);
+
+                if (classIndex1 === -1 || classIndex2 === -1) return prevTimetable;
+
+                // 授業エントリを取得
+                const classEntry1 = newTimetable.Days[dayIndex1].Classes[classIndex1];
+                const classEntry2 = newTimetable.Days[dayIndex2].Classes[classIndex2];
+
+                // periods.periodを交換
+                const tempPeriod = classEntry1.periods.period;
+                classEntry1.periods.period = classEntry2.periods.period;
+                classEntry2.periods.period = tempPeriod;
+
+                // 授業エントリを交換
+                newTimetable.Days[dayIndex1].Classes[classIndex1] = classEntry2;
+                newTimetable.Days[dayIndex2].Classes[classIndex2] = classEntry1;
+
+                return newTimetable;
+            });
+
+            setSelectedClass(null);
+        }
+    }, [selectedClass]);
 
     // Update timetable name
     const handleUpdate = async () => {
@@ -75,7 +167,6 @@ const EditTimetable = () => {
         }
     };
 
-    // Categorize data by classes
     const generateTimetableByClasses = (days: TimetableDay[] | undefined) => {
         const classLabels = ['ME1', 'IE1', 'CA1', 'ME2', 'IE2', 'CA2', 'ME3', 'IE3', 'CA3', 'ME4', 'IE4', 'CA4', 'ME5', 'IE5', 'CA5'];
         const timetableByClasses: { [key: string]: { [key: string]: (ClassEntry | null)[] } } = {};
@@ -103,28 +194,9 @@ const EditTimetable = () => {
         return timetableByClasses;
     };
 
-    const handleTeacherChange = (value: string) => {
-        setSelectedTeacher(value);
-    };
-
-    const toggleFilterMode = () => {
-        setFilterMode(!filterMode);
-    };
-
-    const isHighlighted = (classEntry: ClassEntry) => {
-        return selectedTeacher && classEntry.Instructors.includes(selectedTeacher);
-    };
-    /*
-    const shouldDisplay = (classEntry: ClassEntry) => {
-        return !filterMode || !selectedTeacher || classEntry.Instructors.includes(selectedTeacher);
-    };
-    */
     if (loading) return <div>Loading...</div>;
 
     const timetableByClasses = timetable?.Days ? generateTimetableByClasses(timetable.Days) : {};
-    const allTeachers = timetable?.Days
-        .flatMap(day => day.Classes.flatMap(c => c.Instructors))
-        .filter((v, i, a) => a.indexOf(v) === i) || [];  // Get unique teachers
 
     return (
         <div>
@@ -134,6 +206,7 @@ const EditTimetable = () => {
             <Header />
             {timetable && (
                 <div style={{ padding: '30px' }}>
+                    {/* Dialog for updating timetable name */}
                     <Dialog>
                         <DialogTrigger asChild>
                             <Button>時間割名を編集</Button>
@@ -154,34 +227,14 @@ const EditTimetable = () => {
                         </DialogContent>
                     </Dialog>
 
-                    {/* Teacher selection and filter toggle */}
-                    <div className="flex items-center space-x-4 mb-4">
-                        <Select onValueChange={handleTeacherChange}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="先生を選択" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {allTeachers.map((teacher) => (
-                                    <SelectItem key={teacher} value={teacher}>
-                                        {teacher}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <div className="flex items-center space-x-2">
-                            <Switch id="filter-mode" checked={filterMode} onCheckedChange={toggleFilterMode} />
-                            <span>フィルターモード</span>
-                        </div>
-                    </div>
-
                     {/* Scrollable Table */}
                     <ScrollArea style={{ height: '80vh', width: '100%' }}>
                         <Table style={{
                             borderCollapse: 'collapse',
                             width: '100%',
                             border: '2px solid #000',
-                            marginLeft: '80px',  // 左端のスペース
-                            marginRight: '80px'  // 右端のスペース
+                            marginLeft: '80px',
+                            marginRight: '80px'
                         }}>
                             <TableHeader>
                                 <TableRow style={{ borderBottom: '2px solid #000' }}>
@@ -209,7 +262,9 @@ const EditTimetable = () => {
                                             padding: '10px',
                                             fontWeight: 'bold',
                                             textAlign: 'center'
-                                        }}>{classLabel}</TableCell>
+                                        }}>
+                                            {classLabel}
+                                        </TableCell>
                                         {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
                                             <TableCell
                                                 key={day}
@@ -222,26 +277,22 @@ const EditTimetable = () => {
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start', flexWrap: 'nowrap' }}>
-                                                    {timetableByClasses[classLabel][day]?.slice(0, 4).map((entry, index) => (
-                                                        entry ? (
-                                                            <div key={index} style={{
-                                                                border: '1px solid #ddd',
-                                                                borderRadius: '5px',
-                                                                padding: '10px',
-                                                                width: '150px',
-                                                                height: 'auto',
-                                                                textAlign: 'center',
-                                                                backgroundColor: isHighlighted(entry) ? 'yellow' : '#f9f9f9',  // ハイライト
-                                                                overflowWrap: 'break-word',
-                                                            }}>
-                                                                <div>{entry.Subject}</div>
-                                                                <div>{entry.Rooms.join(', ')}</div>
-                                                                <div>{entry.Instructors.join(', ')}</div>
-                                                            </div>
-                                                        ) : (
-                                                            <div key={`empty-${index}`} style={{ width: '150px', height: '100px' }}>空きコマ</div>
-                                                        )
-                                                    ))}
+                                                    {timetableByClasses[classLabel][day]?.map((entry, index) => {
+                                                        const period = entry?.periods.period ?? index; // entryが存在しない場合はindexを使用
+                                                        return (
+                                                            <ClassCard
+                                                                key={index}
+                                                                entry={entry || undefined}
+                                                                isSelected={
+                                                                    selectedClass?.day === day &&
+                                                                    selectedClass?.classLabel === classLabel &&
+                                                                    selectedClass?.period === period
+                                                                }
+                                                                isEmpty={!entry}
+                                                                onDoubleClick={() => handleClassDoubleClick(day, classLabel, period)}
+                                                            />
+                                                        );
+                                                    })}
                                                 </div>
                                             </TableCell>
                                         ))}
@@ -259,10 +310,8 @@ const EditTimetable = () => {
 // サスペンスでラップする部分
 export default function PageWrapper() {
     return (
-        <DndProvider backend={HTML5Backend}>
-            <Suspense fallback={<div>Loading...</div>}>
-                <EditTimetable />
-            </Suspense>
-        </DndProvider>
+        <Suspense fallback={<div>Loading...</div>}>
+            <EditTimetable />
+        </Suspense>
     );
 }

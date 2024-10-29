@@ -155,6 +155,7 @@ const EditTimetable = () => {
         }
     }, [selectedClass]);
 
+
     // Update timetable name
     const handleUpdate = async () => {
         try {

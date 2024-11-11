@@ -1,13 +1,20 @@
 // types.ts
-
+export interface Course {
+    id?: string;
+    name: string;
+    description: string;
+    credits: number;
+    periods: Period[];
+    targets: string[];
+}
 export interface TimetableList {
     id: string;
     name: string;
     file: string;
 }
 export interface Period {
+    day: number;
     period: number;
-    length: number;
 }
 
 export interface ClassEntry {

@@ -1,5 +1,6 @@
 "use client";
 
+//import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
@@ -14,7 +15,8 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogFooter
+    DialogFooter,
+    DialogDescription,
 } from '@/components/ui/dialog';
 import {
     Table,
@@ -109,51 +111,78 @@ const EditTimetable = () => {
     }, [id]);
 
     // Handle class selection and swapping
-    const handleClassDoubleClick = useCallback((day: string, classLabel: string, period: number | undefined) => {
-        if (period === undefined) return; // periodがundefinedの場合は何もしない
+    const handleClassDoubleClick = useCallback(
+        (day: string, classLabel: string, period: number | undefined) => {
+            if (period === undefined) return; // periodがundefinedの場合は何もしない
 
-        if (selectedClass === null) {
-            // 最初の授業を選択
-            setSelectedClass({ day, classLabel, period });
-        } else if (selectedClass.day === day && selectedClass.classLabel === classLabel && selectedClass.period === period) {
-            // 同じ授業を再度クリックした場合、選択解除
-            setSelectedClass(null);
-        } else {
-            // 授業をスワップ
-            setTimetable(prevTimetable => {
-                if (!prevTimetable) return prevTimetable;
+            if (selectedClass === null) {
+                // 最初の授業を選択
+                console.log("Selecting class:", { day, classLabel, period });
+                setSelectedClass({ day, classLabel, period });
+            } else if (
+                selectedClass.day === day &&
+                selectedClass.classLabel === classLabel &&
+                selectedClass.period === period
+            ) {
+                // 同じ授業を再度クリックした場合、選択解除
+                console.log("Deselecting class:", selectedClass);
+                setSelectedClass(null);
+            } else {
+                // 授業をスワップ
+                setTimetable((prevTimetable) => {
+                    if (!prevTimetable) return prevTimetable;
 
-                const newTimetable = _.cloneDeep(prevTimetable);
+                    const newTimetable = _.cloneDeep(prevTimetable);
 
-                const dayIndex1 = newTimetable.Days.findIndex(d => d.Day === selectedClass.day);
-                const dayIndex2 = newTimetable.Days.findIndex(d => d.Day === day);
+                    // まず、スワップ対象のインデックスを特定
+                    const dayIndex1 = newTimetable.Days.findIndex(
+                        (d) => d.Day === selectedClass.day
+                    );
+                    const dayIndex2 = newTimetable.Days.findIndex((d) => d.Day === day);
 
-                if (dayIndex1 === -1 || dayIndex2 === -1) return prevTimetable;
+                    console.log("Day indices:", { dayIndex1, dayIndex2 });
 
-                const classIndex1 = newTimetable.Days[dayIndex1].Classes.findIndex(c => c.periods.period === selectedClass.period);
-                const classIndex2 = newTimetable.Days[dayIndex2].Classes.findIndex(c => c.periods.period === period);
+                    if (dayIndex1 === -1 || dayIndex2 === -1) return prevTimetable;
 
-                if (classIndex1 === -1 || classIndex2 === -1) return prevTimetable;
+                    const classIndex1 = newTimetable.Days[dayIndex1].Classes.findIndex(
+                        (c) => c.periods.period === selectedClass.period && c.Targets.includes(selectedClass.classLabel)
+                    );
+                    const classIndex2 = newTimetable.Days[dayIndex2].Classes.findIndex(
+                        (c) => c.periods.period === period && c.Targets.includes(classLabel)
+                    );
 
-                // 授業エントリを取得
-                const classEntry1 = newTimetable.Days[dayIndex1].Classes[classIndex1];
-                const classEntry2 = newTimetable.Days[dayIndex2].Classes[classIndex2];
+                    console.log("Class indices:", { classIndex1, classIndex2 });
 
-                // periods.periodを交換
-                const tempPeriod = classEntry1.periods.period;
-                classEntry1.periods.period = classEntry2.periods.period;
-                classEntry2.periods.period = tempPeriod;
+                    if (classIndex1 === -1 || classIndex2 === -1) return prevTimetable;
 
-                // 授業エントリを交換
-                newTimetable.Days[dayIndex1].Classes[classIndex1] = classEntry2;
-                newTimetable.Days[dayIndex2].Classes[classIndex2] = classEntry1;
+                    // スワップ対象の授業エントリを取得
+                    const classEntry1 = newTimetable.Days[dayIndex1].Classes[classIndex1];
+                    const classEntry2 = newTimetable.Days[dayIndex2].Classes[classIndex2];
 
-                return newTimetable;
-            });
+                    console.log("Swapping classes:", {
+                        class1: { ...classEntry1 },
+                        class2: { ...classEntry2 },
+                    });
 
-            setSelectedClass(null);
-        }
-    }, [selectedClass]);
+                    // periods.periodをスワップ
+                    const tempPeriod = classEntry1.periods.period;
+                    classEntry1.periods.period = classEntry2.periods.period;
+                    classEntry2.periods.period = tempPeriod;
+
+                    // クラスエントリをスワップ
+                    newTimetable.Days[dayIndex1].Classes[classIndex1] = classEntry2;
+                    newTimetable.Days[dayIndex2].Classes[classIndex2] = classEntry1;
+
+                    console.log("Updated timetable after swap:", newTimetable);
+
+                    return newTimetable;
+                });
+
+                setSelectedClass(null);
+            }
+        },
+        [selectedClass]
+    );
 
 
     // Update timetable name
@@ -161,7 +190,7 @@ const EditTimetable = () => {
         try {
             await axios.put(`http://localhost:3001/api/timetable/update/${id}`, { name: newName });
             toast.success("時間割が更新されました。");
-            router.push('/');
+            router.push('/dashboard');
         } catch (error) {
             console.error('Error updating timetable:', error);
             toast.error("時間割の更新に失敗しました。");
@@ -206,18 +235,19 @@ const EditTimetable = () => {
             </Head>
             <Header />
             {timetable && (
-                <div style={{ padding: '30px' }}>
-                    {/* Dialog for updating timetable name */}
+                <div style={{ padding: '30px', marginBottom: '20px' }}> {/* 下部に余白を追加 */}
+                {/* Dialog for updating timetable name */}
                     <Dialog>
                         <DialogTrigger asChild>
-                            <Button>時間割名を編集</Button>
+                        <Button style={{ marginBottom: '20px' }}>時間割名を編集</Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
                                 <DialogTitle>時間割名の編集</DialogTitle>
+                                <DialogDescription>時間割名を変更します。</DialogDescription>
                             </DialogHeader>
                             <Input
-                                value={newName}
+                                value={newName || ""}
                                 onChange={(e) => setNewName(e.target.value)}
                                 placeholder="新しい時間割名を入力"
                                 style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', border: '1px solid #ddd' }}

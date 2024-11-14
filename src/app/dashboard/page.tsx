@@ -71,6 +71,12 @@ interface Instructor {
   periods: Period[];
 };
 
+interface Room {
+  id?: string;
+  name: string;
+  unavailable: Period[];
+}
+
 export default function TimetableDashboard() {
   const [newTimetableName, setNewTimetableName] = useState("")
   const [timetables, setTimetables] = useState<TimetableList[]>([])
@@ -81,6 +87,7 @@ export default function TimetableDashboard() {
 
   const [courses, setCourses] = useState<Course[]>([])
   const [instructors, setInstructors] = useState<Instructor[]>([])
+  const [rooms, setRooms] = useState<Room[]>([])
   const [currentCourse, setCurrentCourse] = useState<Course>({
     name: '',
     instructors: [],
@@ -94,10 +101,16 @@ export default function TimetableDashboard() {
     isFullTime: true,
     periods: []
   })
+  const [currentRoom, setCurrentRoom] = useState<Room>({
+    name: '',
+    unavailable: []
+  })
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [editingInstructorId, setEditingInstructorId] = useState<string | null>(null)
   const [editingInstructor, setEditingInstructor] = useState<Instructor | null>(null)
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null)
 
   const router = useRouter()
 
@@ -105,7 +118,7 @@ export default function TimetableDashboard() {
     router.push(`/edit?id=${id}`)
   }
 
-  // fetchTimetables, fetchCourses, fetchInstructors を useCallback でメモ化
+  // fetchTimetables, fetchCourses, fetchInstructors, fetchRooms を useCallback でメモ化
   const fetchTimetables = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:3001/api/timetable/getAll');
@@ -136,6 +149,20 @@ export default function TimetableDashboard() {
     }
   }, []);
 
+  const fetchRooms = useCallback(async () => {
+    try {
+      const response = await axios.get('http://localhost:3001/api/rooms/getAll');
+
+      // データが配列でない場合に配列に変換
+      const roomsData = Array.isArray(response.data) ? response.data : response.data.rooms || [];
+      setRooms(roomsData);
+      console.log("Fetched rooms:", roomsData); // デバッグ用
+    } catch (error) {
+      toast.error("教室の取得に失敗しました。");
+      console.error("Error fetching rooms:", error);
+    }
+  }, []);
+
   // useEffect で fetchData を実行
   useEffect(() => {
     const fetchData = async () => {
@@ -144,6 +171,7 @@ export default function TimetableDashboard() {
         await fetchTimetables();
         await fetchCourses();
         await fetchInstructors();
+        await fetchRooms();
       } catch (error) {
         console.error("Error fetching data:", error);
         toast.error("データの取得に失敗しました。");
@@ -153,7 +181,7 @@ export default function TimetableDashboard() {
     };
 
     fetchData();
-  }, [fetchTimetables, fetchCourses, fetchInstructors]); // 依存配列に含める
+  }, [fetchTimetables, fetchCourses, fetchInstructors, fetchRooms]); // 依存配列に含める
 
 
   const createTimetable = async () => {
@@ -307,9 +335,69 @@ export default function TimetableDashboard() {
     }
   }
 
-  const togglePeriod = (day: number, period: number, type: 'course' | 'instructor') => {
+  const createRoom = async () => {
+    if (!currentRoom.name) {
+      toast.error("教室名を入力してください。");
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await axios.post('http://localhost:3001/api/rooms/create', [currentRoom]);
+      const newRoom = response.data;
+
+      if (newRoom && newRoom.name) {
+        setRooms((prevRooms) => (Array.isArray(prevRooms) ? [...prevRooms, newRoom] : [newRoom]));
+        setCurrentRoom({
+          name: '',
+          unavailable: []
+        });
+        toast.success("教室が保存されました。");
+      } else {
+        toast.error("作成された教室データが不正です。");
+      }
+    } catch (error) {
+      console.error("Error saving room:", error);
+      setError("教室の保存に失敗しました。");
+      toast.error("教室の保存に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const deleteRoom = async (id: string) => {
+    setLoading(true);
+    try {
+        await axios.delete(`http://localhost:3001/api/rooms/delete/${encodeURIComponent(id)}`);
+
+        // 教室の削除が成功した後にroomsの状態を更新する
+        setRooms((prevRooms) => prevRooms.filter((room) => room.name !== id));
+
+        toast.success("教室が削除されました。");
+    } catch (error) {
+        console.error("Error deleting room:", error);
+        setError("教室の削除に失敗しました。");
+        toast.error("教室の削除に失敗しました。");
+    } finally {
+        setLoading(false);
+    }
+}
+
+  const togglePeriod = (day: number, period: number, type: 'course' | 'instructor' | 'room') => {
     const periodObj = { day, period }
-    if (type === 'course') {
+    if (type === 'room') {
+      const periodIndex = currentRoom.unavailable.findIndex(p => p.day === day && p.period === period)
+      if (periodIndex > -1) {
+        setCurrentRoom({
+          ...currentRoom,
+          unavailable: currentRoom.unavailable.filter((_, index) => index !== periodIndex)
+        })
+      } else {
+        setCurrentRoom({
+          ...currentRoom,
+          unavailable: [...currentRoom.unavailable, periodObj]
+        })
+      }
+    } else if (type === 'course') {
       const periodIndex = currentCourse.periods.findIndex(p => p.day === day && p.period === period)
       if (periodIndex > -1) {
         setCurrentCourse({
@@ -320,6 +408,19 @@ export default function TimetableDashboard() {
         setCurrentCourse({
           ...currentCourse,
           periods: [...currentCourse.periods, periodObj]
+        })
+      }
+    } else if (type === 'instructor') {
+      const periodIndex = currentInstructor.periods.findIndex(p => p.day === day && p.period === period)
+      if (periodIndex > -1) {
+        setCurrentInstructor({
+          ...currentInstructor,
+          periods: currentInstructor.periods.filter((_, index) => index !== periodIndex)
+        })
+      } else {
+        setCurrentInstructor({
+          ...currentInstructor,
+          periods: [...currentInstructor.periods, periodObj]
         })
       }
     } else {
@@ -413,6 +514,40 @@ export default function TimetableDashboard() {
     }
   }
 
+  const handleEditRoom = async () => {
+    if (!editingRoomId || !editingInstructor) {
+      toast.error("編集中の教室IDが不正です。");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.put(
+        `http://localhost:3001/api/rooms/update/${encodeURIComponent(editingRoomId)}`,
+        editingRoom
+      )
+
+      const updatedRoom = response.data.updateRoom;
+
+      if (updatedRoom) {
+        setRooms((prevRooms) =>
+          prevRooms.map((room) =>
+            room.id === editingRoomId ? updatedRoom : room
+          )
+        );
+        toast.success("教室が更新されました。");
+        setEditingRoom(null);
+        setEditingRoomId(null);
+      } else {
+        toast.error("更新された教室データが不正です。");
+      }
+    } catch (error) {
+      console.error("Error updating room:", error);
+      toast.error("教室の更新に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
   return (
     <div>
       <Head>
@@ -424,10 +559,11 @@ export default function TimetableDashboard() {
         <main className="flex-1 p-6 bg-muted/40">
           <div className="max-w-6xl mx-auto space-y-6">
             <Tabs defaultValue="timetables">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="timetables">時間割</TabsTrigger>
                 <TabsTrigger value="courses">授業</TabsTrigger>
                 <TabsTrigger value="instructors">教員</TabsTrigger>
+                <TabsTrigger value="rooms">教室</TabsTrigger>
               </TabsList>
               <TabsContent value="timetables">
                 <div className="space-y-6">
@@ -451,7 +587,6 @@ export default function TimetableDashboard() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-
                             <AlertDialogTitle>全ての時間割を削除</AlertDialogTitle>
                             <AlertDialogDescription>
                               本当に全ての時間割を削除してもよろしいですか？この操作は元に戻せません。
@@ -985,6 +1120,188 @@ export default function TimetableDashboard() {
                               <TableRow>
                                 <TableCell colSpan={4} className="text-center">
                                   登録された教員がありません。
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="rooms">
+                    <Tabs defaultValue="add">
+                      <TabsList>
+                        <TabsTrigger value="add">新規教室追加</TabsTrigger>
+                        <TabsTrigger value="manage">教室一覧・管理</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </TabsContent>
+                </Tabs>
+              </TabsContent>
+              <TabsContent value="rooms">
+                <Tabs defaultValue="add">
+                  <TabsList>
+                    <TabsTrigger value="add">新規教室追加</TabsTrigger>
+                    <TabsTrigger value="manage">教室一覧・管理</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="add">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>新規教室作成</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid w-full items-center gap-4">
+                          <div className="flex flex-col space-y-1.5">
+                            <Label htmlFor="roomName">教室名</Label>
+                            <Input
+                              id="roomName"
+                              value={currentRoom.name}
+                              onChange={(e) => setCurrentRoom({ ...currentRoom, name: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex flex-col space-y-1.5">
+                            <Label>使用する時間帯</Label>
+                            <div className="grid grid-cols-5 gap-2">
+                              {[1, 2, 3, 4, 5].map(day => (
+                                <div key={day} className="flex flex-col items-center">
+                                  <span>Day {day}</span>
+                                  {[1, 2, 3, 4].map(period => (
+                                    <Checkbox
+                                      key={`${day}-${period}`}
+                                      checked={currentRoom.unavailable.some(p => p.day === day && p.period === period)}
+                                      onCheckedChange={() => togglePeriod(day, period, 'room')}
+                                    />
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="flex justify-between">
+                        <Button variant="outline" onClick={() => setCurrentRoom({
+                          name: '',
+                          unavailable: []
+                        })}>
+                          クリア
+                        </Button>
+                        <Button onClick={createRoom}>作成</Button>
+                      </CardFooter>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="manage">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>教室一覧・管理</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>教室名</TableHead>
+                              <TableHead>利用可能な時間</TableHead>
+                              <TableHead>操作</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {Array.isArray(rooms) && rooms.length > 0 ? (
+                              rooms.map((room, index) => (
+                                <TableRow key={`${room.name}-${index}`}>
+                                  <TableCell>{room.name}</TableCell>
+                                  <TableCell>{room.unavailable.length}</TableCell>
+                                  <TableCell>
+                                    <Sheet>
+                                      <SheetTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            setEditingRoom(room);
+                                            setEditingRoomId(room.name);
+                                          }}
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </Button>
+                                      </SheetTrigger>
+                                      <SheetContent>
+                                        <SheetHeader>
+                                          <SheetTitle>教室の編集</SheetTitle>
+                                          <SheetDescription>教室の情報を編集します</SheetDescription>
+                                        </SheetHeader>
+                                        {editingRoom && (
+                                          <div className="grid gap--4 py-4">
+                                            <div className="ggrid grid-cols-4 items-center gap-4">
+                                              <Label htmlFor="roomName" className="text-right">
+                                                教室名
+                                              </Label>
+                                              <Input
+                                                id="roomName"
+                                                value={editingRoom.name}
+                                                onChange={(e) =>
+                                                  setEditingRoom({ ...editingRoom, name: e.target.value })}
+                                                className="col-span-3"
+                                              />
+                                            </div>
+                                            <div className="grid grid-cols-4 items-center gap-4">
+                                              <Label className="text-right">使用する時間帯</Label>
+                                              <div className="col-span-3 grid grid-cols-5 gap-2">
+                                                {[1, 2, 3, 4, 5].map(day => (
+                                                  <div key={day} className="flex flex-col items-center">
+                                                    <span>Day {day}</span>
+                                                    {[1, 2, 3, 4].map(period => (
+                                                      <Checkbox
+                                                        key={`${day}-${period}`}
+                                                        checked={editingRoom.unavailable.some(p => p.day === day && p.period === period)}
+                                                        onCheckedChange={() => {
+                                                          const newPeriods = editingRoom.unavailable.some(p => p.day === day && p.period === period)
+                                                            ? editingRoom.unavailable.filter(p => !(p.day === day && p.period === period))
+                                                            : [...editingRoom.unavailable, { day, period }];
+                                                          setEditingRoom({ ...editingRoom, unavailable: newPeriods });
+                                                        }}
+                                                      />
+                                                    ))}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        <SheetFooter>
+                                          <SheetClose asChild>
+                                            <Button type="submit" onClick={handleEditRoom}>保存</Button>
+                                          </SheetClose>
+                                          <Button variant="outline" onClick={() => setEditingRoom(null)}>キャンセル</Button>
+                                        </SheetFooter>
+                                      </SheetContent>
+                                    </Sheet>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="sm">
+                                          <Trash className="w-4 h-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>教室の削除</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            本当にこの教室を削除してもよろしいですか？この操作は元に戻せません。
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => deleteRoom(room.name)}>
+                                            削除
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={3} className="text-center">
+                                  登録された教室がありません。
                                 </TableCell>
                               </TableRow>
                             )}

@@ -12,6 +12,7 @@ export interface TimetableList {
     name: string;
     file: string;
 }
+
 export interface Period {
     day: number;
     period: number;
@@ -56,4 +57,42 @@ export interface DroppableCellProps {
     entry: ClassEntry | null;
     isHighlighted: (entry: ClassEntry) => boolean;  // 関数でbooleanを返す
     children?: React.ReactNode;
+}
+
+export interface CustomJwtPayload {
+    id: string;
+    name: string;
+    role: string;
+    accessLevel: string[];
+    useTimetable?: string; // 時間割ID（任意）
+    exp?: number;          // 有効期限（任意）
+}
+
+export interface CurrentPeriodData {
+    day: number;
+    period: number | 'special'; // 'special' を許可
+}
+
+export interface ClassDetails {
+    subject: string;
+    instructors: string[];
+    room: string;
+}
+
+export interface Instructor {
+    id: string;
+    name: string;
+    isFullTime: boolean;
+    period: Period[];
+}
+
+export interface InstructorList {
+    Instructor: Instructor[];
+}
+
+export interface NextClasses {
+    Subject: string;
+    Instructors: string[];
+    Rooms: string[];
+    Targets: string[];
 }

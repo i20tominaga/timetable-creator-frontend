@@ -26,8 +26,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-// import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-// import { Switch } from "@/components/ui/switch";
 import { toast } from 'react-hot-toast';
 import Head from 'next/head';
 import Header from '@/components/Header';
@@ -85,6 +83,7 @@ const EditTimetable = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
+    // 
     const [timetable, setTimetable] = useState<Timetable | null>(null);
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(true);

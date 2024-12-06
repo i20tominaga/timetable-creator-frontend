@@ -22,9 +22,7 @@ import {
     Timetable,
     CustomJwtPayload,
     CurrentPeriodData,
-    Instructor,
-    InstructorList,
-    Course
+    Instructor
 } from '@/components/types';
 
 // 現在の曜日と時限を取得するAPI呼び出し関数

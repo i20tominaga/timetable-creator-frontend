@@ -22,7 +22,8 @@ import {
     Timetable,
     CustomJwtPayload,
     CurrentPeriodData,
-    Instructor
+    Instructor,
+    ClassEntry
 } from '@/components/types';
 
 // 現在の曜日と時限を取得するAPI呼び出し関数
@@ -49,7 +50,7 @@ const getTeachingInstructorsForCurrentPeriod = (
     timetable: Timetable,
     currentDay: number,
     currentPeriod: number
-): { teachingDetails: any[]; isBreakTime: boolean } => {
+): { teachingDetails: ClassEntry[]; isBreakTime: boolean } => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDayString = days[currentDay];
 
@@ -77,15 +78,20 @@ const getTeachingInstructorsForCurrentPeriod = (
         return classPeriod === adjustedPeriod;
     });
 
+    console.log('Current Classes:', currentClasses);
+
     const isBreakTime = currentClasses.length === 0;
 
-    // 授業情報を収集
-    const teachingDetails = currentClasses.map((cls) => ({
-        subjectName: cls.Subject || '未設定',
-        instructors: cls.Instructors || [],
-        classroom: cls.Rooms || '未設定',
-        className: cls.Targets || '未設定',
+    // 授業情報を収集 (ClassEntry 型に合わせる)
+    const teachingDetails: ClassEntry[] = currentClasses.map((cls) => ({
+        Subject: cls.Subject || '未設定',
+        Instructors: cls.Instructors || [],
+        Rooms: cls.Rooms || [],
+        periods: cls.periods || { day: currentDay, period: currentPeriod },
+        Targets: cls.Targets || [],
     }));
+
+
 
     return { teachingDetails, isBreakTime };
 };
@@ -131,7 +137,7 @@ const getFreeInstructors = (allInstructors: Instructor[], teachingInstructors: s
 };
 
 // 次の時限の授業を取得する関数
-const getNextPeriodClasses = (
+/*const getNextPeriodClasses = (
     timetable: Timetable,
     currentDay: number,
     currentPeriod: number
@@ -159,7 +165,7 @@ const getNextPeriodClasses = (
         classroom: cls.Rooms || '未設定',
         className: cls.Targets || '未設定',
     }));
-};
+};*/
 
 const HomePage = () => {
     const [timetableId, setTimetableId] = useState<string | null>(null);    // 時間割ID
@@ -170,11 +176,11 @@ const HomePage = () => {
     const [currentPeriod, setCurrentPeriod] = useState<number | null>(null);    // 現在の時限
     const [currentTime, setCurrentTime] = useState<string>('');   // 現在時刻
     const [isBreakTime, setIsBreakTime] = useState<boolean>(false);   // 休憩時間かどうか
-    const [teachingDetails, setTeachingDetails] = useState<any[]>([]); // 授業の詳細情報を保存する状態
+    const [teachingDetails, setTeachingDetails] = useState<ClassEntry[]>([]); // 授業の詳細情報を保存する状態
     const [searchQuery, setSearchQuery] = useState(''); // 検索クエリ
     const [fullTimeFilter, setFullTimeFilter] = useState('All'); // フルタイムフィルター
     const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]); // フィルタリングされた先生リスト
-    const [nextClasses, setNextClasses] = useState<any[]>([]); // 次の時限の授業情報
+    //const [nextClasses, setNextClasses] = useState<any[]>([]); // 次の時限の授業情報
     const [isLoading, setIsLoading] = useState(true);   // ローディング中かどうか
 
     // ルーターの取得
@@ -182,6 +188,7 @@ const HomePage = () => {
 
     // JWTトークンのデコードと時間割IDの取得
     useEffect(() => {
+        console.log('Router が変更されました:', router); // デバッグ用ログを追加
         const fetchTokenData = () => {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -194,19 +201,11 @@ const HomePage = () => {
                 const decoded = jwtDecode<CustomJwtPayload>(token);
                 console.log('Decoded Token:', decoded);
 
-                const currentTime = Math.floor(Date.now() / 1000);
-                if (decoded.exp && decoded.exp < currentTime) {
-                    console.warn('トークンの有効期限が切れています。');
-                    localStorage.removeItem('token');
-                    router.push('/login');
-                    return;
-                }
-
                 if (decoded.useTimetable) {
-                    setTimetableId(decoded.useTimetable); // 正しく取得
+                    console.log('useTimetable:', decoded.useTimetable); // ログを追加
+                    setTimetableId(decoded.useTimetable); // 設定されているか確認
                 } else {
                     console.error('トークンに時間割ID (useTimetable) が含まれていません。');
-                    setTimetableId(null); // エラー時のフォールバック
                 }
             } catch (error) {
                 console.error('トークンのデコードに失敗しました:', error);
@@ -222,32 +221,41 @@ const HomePage = () => {
         const fetchData = async () => {
             try {
                 if (!timetableId) {
-                    console.error('時間割IDが見つかりません。処理を中断します。');
-                    setIsLoading(false);
+                    console.error('時間割IDが見つかりません。');
                     return;
                 }
 
-                const currentPeriodData = await fetchCurrentDayAndPeriod();
-                if (!currentPeriodData || typeof currentPeriodData.period !== 'number') {
-                    console.error('現在の時限データが無効です。');
+                console.log('時間割ID:', timetableId);
+
+                const [currentPeriodData, allInstructorsResponse, timetableResponse] = await Promise.all([
+                    fetchCurrentDayAndPeriod(),
+                    fetchAllInstructors(),
+                    axios.get<Timetable>(`http://localhost:3001/api/timetable/get/${timetableId}`, {
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem('token')}`,
+                        },
+                    }),
+                ]);
+
+                if (!currentPeriodData) {
+                    console.error('現在の時限データが取得できませんでした');
                     return;
                 }
 
                 const { day, period } = currentPeriodData;
 
-                console.log(`現在の曜日: ${day}, 現在の時限 (調整済み): ${period}`);
-
-                const timetableResponse = await axios.get<Timetable>(
-                    `http://localhost:3001/api/timetable/get/${timetableId}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${localStorage.getItem('token')}`,
-                        },
-                    }
-                );
+                // "special" の場合の処理
+                if (period === "special") {
+                    console.warn('現在の時限は "special" です。デフォルト値を設定します。');
+                    setIsBreakTime(true); // "special" を休憩時間として扱う例
+                    setTeachingDetails([]); // 空の授業情報を設定
+                    setFreeInstructors(allInstructorsResponse); // 全員を空きとする
+                    setCurrentDay(['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'][day]);
+                    setCurrentPeriod(null); // 現在の時限を表示しない
+                    return; // 他の処理をスキップ
+                }
 
                 const timetableData = timetableResponse.data;
-                setTimetable(timetableData);
 
                 const { teachingDetails, isBreakTime } = getTeachingInstructorsForCurrentPeriod(
                     timetableData,
@@ -255,20 +263,17 @@ const HomePage = () => {
                     period
                 );
 
-                const allInstructors = await fetchAllInstructors();
-                console.log('取得した全教員:', allInstructors);
+                const freeInstructors = getFreeInstructors(
+                    allInstructorsResponse,
+                    teachingDetails.map((t) => t.Instructors).flat()
+                );
 
-                const freeInstructors = getFreeInstructors(allInstructors, teachingDetails.map((t) => t.instructors).flat());
-                console.log('空いている教員:', freeInstructors);
-
-                setTeachingInstructors(teachingDetails.map((t) => t.instructors).flat());
+                setTimetable(timetableData);
+                setTeachingInstructors(teachingDetails.map((t) => t.Instructors).flat());
                 setFreeInstructors(freeInstructors);
+                setTeachingDetails(teachingDetails);
                 setIsBreakTime(isBreakTime);
-                setTeachingDetails(teachingDetails); // 新たに教員情報を状態にセット
-                setFilteredInstructors(freeInstructors); // フィルタリングされた先生リストをセット
-
-                const days = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
-                setCurrentDay(days[day]);
+                setCurrentDay(['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'][day]);
                 setCurrentPeriod(period);
 
                 const interval = setInterval(() => {
@@ -279,7 +284,7 @@ const HomePage = () => {
                 return () => clearInterval(interval);
 
             } catch (error) {
-                console.error('データの取得に失敗しました:', error);
+                console.error('データ取得中にエラーが発生しました:', error);
             } finally {
                 setIsLoading(false);
             }
@@ -393,10 +398,10 @@ const HomePage = () => {
                                 <TableBody>
                                     {teachingDetails.map((detail, index) => (
                                         <TableRow key={index}>
-                                            <TableCell>{detail.subjectName}</TableCell>
-                                            <TableCell>{detail.instructors.join(', ')}</TableCell>
-                                            <TableCell>{detail.classroom}</TableCell>
-                                            <TableCell>{detail.className}</TableCell>
+                                            <TableCell>{detail.Subject}</TableCell>
+                                            <TableCell>{detail.Instructors.join(', ')}</TableCell>
+                                            <TableCell>{detail.Rooms}</TableCell>
+                                            <TableCell>{detail.Targets}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

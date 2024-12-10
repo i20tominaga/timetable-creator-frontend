@@ -96,3 +96,18 @@ export interface NextClasses {
     Rooms: string[];
     Targets: string[];
 }
+
+export interface ManualOverride {
+    "isManual": boolean;
+    "reason": string;
+    "setBy": string;
+}
+export interface Room {
+    name: string;
+    unavailable: Period[];
+    manualOverride: ManualOverride;
+}
+
+export interface RoomJson {
+    Room: Room[];
+}

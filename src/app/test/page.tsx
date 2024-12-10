@@ -15,6 +15,12 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import Head from 'next/head';
 import axios from 'axios';
 import Header from '@/components/Header';
@@ -23,7 +29,7 @@ import {
     CustomJwtPayload,
     CurrentPeriodData,
     Instructor,
-    ClassEntry
+    ClassEntry,
 } from '@/components/types';
 
 // 現在の曜日と時限を取得するAPI呼び出し関数
@@ -167,6 +173,20 @@ const getFreeInstructors = (allInstructors: Instructor[], teachingInstructors: s
     }));
 };*/
 
+//　　空き教室データを取得する関数
+const fetchAvailableRooms = async (timetableId: string): Promise<{ availableRooms: string[]; isBreakTime: boolean }> => {
+    try {
+        const response = await axios.post('http://localhost:3001/api/rooms/available', {
+            timetableId,
+        });
+        console.log('Available Rooms Data:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('空き教室データの取得中にエラーが発生しました:', error);
+        return { availableRooms: [], isBreakTime: false };
+    }
+};
+
 const HomePage = () => {
     const [timetableId, setTimetableId] = useState<string | null>(null);    // 時間割ID
     const [timetable, setTimetable] = useState<Timetable | null>(null);     // 時間割デー
@@ -180,9 +200,11 @@ const HomePage = () => {
     const [searchQuery, setSearchQuery] = useState(''); // 検索クエリ
     const [fullTimeFilter, setFullTimeFilter] = useState('All'); // フルタイムフィルター
     const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]); // フィルタリングされた先生リスト
-    //const [nextClasses, setNextClasses] = useState<any[]>([]); // 次の時限の授業情報
+    const [availableRooms, setAvailableRooms] = useState<string[]>([]); // 空き教室情報
+    const [isBreakTimeRooms, setIsBreakTimeRooms] = useState<boolean>(false); // 休憩時間かどうか
     const [isLoading, setIsLoading] = useState(true);   // ローディング中かどうか
-
+    const [isTeachersOpen, setIsTeachersOpen] = useState(false);
+    const [isRoomsOpen, setIsRoomsOpen] = useState(false);
     // ルーターの取得
     const router = useRouter();
 
@@ -291,6 +313,18 @@ const HomePage = () => {
         };
 
         fetchData();
+    }, [timetableId]);
+
+    useEffect(() => {
+        const fetchRoomsData = async () => {
+            if (!timetableId) return;
+
+            const { availableRooms, isBreakTime } = await fetchAvailableRooms(timetableId);
+            setAvailableRooms(availableRooms);
+            setIsBreakTimeRooms(isBreakTime);
+        };
+
+        fetchRoomsData();
     }, [timetableId]);
 
     useEffect(() => {
@@ -435,34 +469,67 @@ const HomePage = () => {
                         </Select>
                     </div>
 
-                    {/* 空いている先生 */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>空いている先生</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {filteredInstructors.length > 0 ? (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>教員名</TableHead>
-                                            <TableHead>勤務形態</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredInstructors.map((instructor, index) => (
-                                            <TableRow key={index}>
-                                                <TableCell>{instructor.name}</TableCell>
-                                                <TableCell>{instructor.isFullTime ? '常勤' : '非常勤'}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            ) : (
-                                <p>該当する先生はいません。</p>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* 空いている先生 */}
+                        <Collapsible open={isTeachersOpen} onOpenChange={setIsTeachersOpen}>
+                            <Card className="w-full">
+                                <CollapsibleTrigger asChild>
+                                    <CardHeader className="cursor-pointer flex items-center justify-between">
+                                        <CardTitle>空いている先生</CardTitle>
+                                        {isTeachersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    </CardHeader>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="overflow-hidden">
+                                    <CardContent>
+                                        {filteredInstructors.length > 0 ? (
+                                            <Table>
+                                                <TableBody>
+                                                    {filteredInstructors.map((instructor, index) => (
+                                                        <TableRow key={index}>
+                                                            <TableCell>{instructor.name}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        ) : (
+                                            <p>該当する先生はいません。</p>
+                                        )}
+                                    </CardContent>
+                                </CollapsibleContent>
+                            </Card>
+                        </Collapsible>
+
+                        {/* 空いている教室 */}
+                        <Collapsible open={isRoomsOpen} onOpenChange={setIsRoomsOpen}>
+                            <Card className="w-full">
+                                <CollapsibleTrigger asChild>
+                                    <CardHeader className="cursor-pointer flex items-center justify-between">
+                                        <CardTitle>空いている教室</CardTitle>
+                                        {isRoomsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    </CardHeader>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="overflow-hidden">
+                                    <CardContent>
+                                        {isBreakTimeRooms ? (
+                                            <p>現在は休憩時間です。</p>
+                                        ) : availableRooms.length > 0 ? (
+                                            <Table>
+                                                <TableBody>
+                                                    {availableRooms.map((room, index) => (
+                                                        <TableRow key={index}>
+                                                            <TableCell>{room}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        ) : (
+                                            <p>空いている教室はありません。</p>
+                                        )}
+                                    </CardContent>
+                                </CollapsibleContent>
+                            </Card>
+                        </Collapsible>
+                    </div>
                 </div>
             </div>
         </div>

@@ -6,7 +6,7 @@ const SetRoomManual = () => {
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [reason, setReason] = useState("");
-    const [setBy, setSetBy] = useState("current_user"); // ログインユーザー名を想定
+    const [setBy, /*setSetBy*/] = useState("current_user"); // ログインユーザー名を想定
 
     const handleSubmit = async () => {
         try {

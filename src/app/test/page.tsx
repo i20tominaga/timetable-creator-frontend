@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
@@ -15,12 +17,8 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import Head from 'next/head';
 import axios from 'axios';
 import Header from '@/components/Header';
@@ -31,6 +29,16 @@ import {
     Instructor,
     ClassEntry,
 } from '@/components/types';
+
+interface SearchTypeOptions {
+    TEACHERS: string;
+    ROOMS: string;
+}
+
+const SearchType: SearchTypeOptions = {
+    TEACHERS: 'teachers',
+    ROOMS: 'rooms',
+};
 
 // 現在の曜日と時限を取得するAPI呼び出し関数
 const fetchCurrentDayAndPeriod = async (): Promise<CurrentPeriodData | null> => {
@@ -198,13 +206,14 @@ const HomePage = () => {
     const [isBreakTime, setIsBreakTime] = useState<boolean>(false);   // 休憩時間かどうか
     const [teachingDetails, setTeachingDetails] = useState<ClassEntry[]>([]); // 授業の詳細情報を保存する状態
     const [searchQuery, setSearchQuery] = useState(''); // 検索クエリ
-    const [fullTimeFilter, setFullTimeFilter] = useState('All'); // フルタイムフィルター
     const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]); // フィルタリングされた先生リスト
+    const [filteredRooms, setFilteredRooms] = useState<string[]>([]); // フィルタリングされた教室リスト
     const [availableRooms, setAvailableRooms] = useState<string[]>([]); // 空き教室情報
     const [isBreakTimeRooms, setIsBreakTimeRooms] = useState<boolean>(false); // 休憩時間かどうか
     const [isLoading, setIsLoading] = useState(true);   // ローディング中かどうか
-    const [isTeachersOpen, setIsTeachersOpen] = useState(false);
-    const [isRoomsOpen, setIsRoomsOpen] = useState(false);
+    const [searchType, setSearchType] = useState(SearchType.TEACHERS); // 検索タイプ
+
+
     // ルーターの取得
     const router = useRouter();
 
@@ -315,31 +324,40 @@ const HomePage = () => {
         fetchData();
     }, [timetableId]);
 
+
+    // 空き教室データの取得
     useEffect(() => {
         const fetchRoomsData = async () => {
             if (!timetableId) return;
 
-            const { availableRooms, isBreakTime } = await fetchAvailableRooms(timetableId);
-            setAvailableRooms(availableRooms);
-            setIsBreakTimeRooms(isBreakTime);
+            try {
+                const { availableRooms, isBreakTime } = await fetchAvailableRooms(timetableId);
+                setAvailableRooms(availableRooms); // 空き教室のデータを設定
+                setIsBreakTimeRooms(isBreakTime); // 休憩時間かどうかを設定
+            } catch (error) {
+                console.error('空き教室データの取得に失敗しました:', error);
+            }
         };
 
         fetchRoomsData();
     }, [timetableId]);
 
+    // 検索フィルタリング
     useEffect(() => {
-        const filtered = freeInstructors.filter((instructor) => {
-            const matchesSearch = instructor.name.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesFullTimeFilter =
-                fullTimeFilter === 'All' ||
-                (fullTimeFilter === 'FullTime' && instructor.isFullTime) ||
-                (fullTimeFilter === 'PartTime' && !instructor.isFullTime);
-
-            return matchesSearch && matchesFullTimeFilter;
-        });
-
-        setFilteredInstructors(filtered);
-    }, [searchQuery, fullTimeFilter, freeInstructors]);
+        if (searchType === SearchType.TEACHERS) {
+            setFilteredInstructors(
+                freeInstructors.filter((instructor) =>
+                    instructor.name.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+            );
+        } else if (searchType === SearchType.ROOMS) {
+            setFilteredRooms(
+                availableRooms.filter((room) =>
+                    room.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+            );
+        }
+    }, [searchQuery, searchType, freeInstructors, availableRooms]);
 
     if (isLoading) {
         return (
@@ -448,87 +466,94 @@ const HomePage = () => {
 
 
                 <div className="p-4 space-y-4">
-                    {/* 検索とフィルタリング */}
+                    {/* 検索フィルタ */}
                     <div className="flex gap-4">
+                        <Select value={searchType} onValueChange={setSearchType}>
+                            <SelectTrigger className="w-full sm:w-[200px]">
+                                <SelectValue placeholder="検索対象を選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={SearchType.TEACHERS}>先生</SelectItem>
+                                <SelectItem value={SearchType.ROOMS}>教室</SelectItem>
+                            </SelectContent>
+                        </Select>
+
                         <Input
-                            placeholder="教員名で検索"
+                            placeholder={
+                                searchType === SearchType.TEACHERS ? '教員名で検索' : '教室名で検索'
+                            }
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="flex-grow"
                         />
-
-                        <Select value={fullTimeFilter} onValueChange={setFullTimeFilter}>
-                            <SelectTrigger className="w-full sm:w-[200px]">
-                                <SelectValue placeholder="勤務形態" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="All">すべて</SelectItem>
-                                <SelectItem value="FullTime">常勤</SelectItem>
-                                <SelectItem value="PartTime">非常勤</SelectItem>
-                            </SelectContent>
-                        </Select>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* 空いている先生 */}
-                        <Collapsible open={isTeachersOpen} onOpenChange={setIsTeachersOpen}>
-                            <Card className="w-full">
-                                <CollapsibleTrigger asChild>
-                                    <CardHeader className="cursor-pointer flex items-center justify-between">
-                                        <CardTitle>空いている先生</CardTitle>
-                                        {isTeachersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                    </CardHeader>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent className="overflow-hidden">
-                                    <CardContent>
-                                        {filteredInstructors.length > 0 ? (
-                                            <Table>
-                                                <TableBody>
-                                                    {filteredInstructors.map((instructor, index) => (
-                                                        <TableRow key={index}>
+                        <Card className="w-full">
+                            <CardHeader className="flex items-center justify-between">
+                                <CardTitle>空いている先生</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {filteredInstructors.length > 0 ? (
+                                    <ScrollArea className="h-48"> {/* 固定の高さを指定 */}
+                                        <Table>
+                                            <TableBody>
+                                                {filteredInstructors.map((instructor, index) => (
+                                                    <React.Fragment key={index}>
+                                                        <TableRow>
                                                             <TableCell>{instructor.name}</TableCell>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        ) : (
-                                            <p>該当する先生はいません。</p>
-                                        )}
-                                    </CardContent>
-                                </CollapsibleContent>
-                            </Card>
-                        </Collapsible>
+                                                        {index < filteredInstructors.length - 1 && <Separator />} {/* 最後の行を除く */}
+                                                    </React.Fragment>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </ScrollArea>
+                                ) : (
+                                    <p>該当する先生はいません。</p>
+                                )}
+                            </CardContent>
+                        </Card>
 
                         {/* 空いている教室 */}
-                        <Collapsible open={isRoomsOpen} onOpenChange={setIsRoomsOpen}>
-                            <Card className="w-full">
-                                <CollapsibleTrigger asChild>
-                                    <CardHeader className="cursor-pointer flex items-center justify-between">
-                                        <CardTitle>空いている教室</CardTitle>
-                                        {isRoomsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                    </CardHeader>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent className="overflow-hidden">
-                                    <CardContent>
-                                        {isBreakTimeRooms ? (
-                                            <p>現在は休憩時間です。</p>
-                                        ) : availableRooms.length > 0 ? (
-                                            <Table>
-                                                <TableBody>
-                                                    {availableRooms.map((room, index) => (
-                                                        <TableRow key={index}>
-                                                            <TableCell>{room}</TableCell>
-                                                        </TableRow>
+                        {/* 空いている教室 */}
+                        <Card className="w-full">
+                            <CardHeader className="flex items-center justify-between">
+                                <CardTitle>空いている教室</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {isBreakTimeRooms ? (
+                                    <p>現在は休憩時間です。</p>
+                                ) : availableRooms.length > 0 ? ( // availableRooms.length を条件に使用
+                                    <ScrollArea className="h-48"> {/* 固定の高さを指定 */}
+                                        <Table>
+                                            <TableBody>
+                                                {filteredRooms.length > 0 // 検索結果がある場合
+                                                    ? filteredRooms.map((room, index) => (
+                                                        <React.Fragment key={index}>
+                                                            <TableRow>
+                                                                <TableCell>{room}</TableCell>
+                                                            </TableRow>
+                                                            {index < filteredRooms.length - 1 && <Separator />} {/* 最後の行を除く */}
+                                                        </React.Fragment>
+                                                    ))
+                                                    : availableRooms.map((room, index) => ( // 検索結果がない場合は全教室を表示
+                                                        <React.Fragment key={index}>
+                                                            <TableRow>
+                                                                <TableCell>{room}</TableCell>
+                                                            </TableRow>
+                                                            {index < availableRooms.length - 1 && <Separator />} {/* 最後の行を除く */}
+                                                        </React.Fragment>
                                                     ))}
-                                                </TableBody>
-                                            </Table>
-                                        ) : (
-                                            <p>空いている教室はありません。</p>
-                                        )}
-                                    </CardContent>
-                                </CollapsibleContent>
-                            </Card>
-                        </Collapsible>
+                                            </TableBody>
+                                        </Table>
+                                    </ScrollArea>
+                                ) : (
+                                    <p>空いている教室はありません。</p>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </div>

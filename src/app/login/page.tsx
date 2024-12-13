@@ -16,6 +16,7 @@ export default function AuthForm() {
     const [role, setRole] = useState('student') // サインアップ時のみ使用
     const [error, setError] = useState('')
     const [isLoading, setIsLoading] = useState(false)
+
     const router = useRouter()
 
     // ログイン処理

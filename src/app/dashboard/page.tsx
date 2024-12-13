@@ -50,6 +50,7 @@ import {
   SheetFooter,
   SheetClose
 } from "@/components/ui/sheet"
+import { useTimetable } from "@/context/TimetableContext"
 
 interface Period {
   day: number;
@@ -112,14 +113,19 @@ export default function TimetableDashboard() {
   const [editingInstructor, setEditingInstructor] = useState<Instructor | null>(null)
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
   const [editingRoom, setEditingRoom] = useState<Room | null>(null)
-
+  const [authCheckComplete, setAuthCheckComplete] = useState(false)
   const { user, isUserLoading } = useUser()
+  const { setEditingTimetableId } = useTimetable()
 
   const router = useRouter()
 
-  const handleEdit = (id: string) => {
-    router.push(`/edit?id=${id}`)
-  }
+  const handleEdit = async (id: string) => {
+    setEditingTimetableId(id);
+    console.log("Set editingTimetableId:", id);
+    // 状態が確実に反映されるのを待つ
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    router.push('/edit');
+  };
 
   // fetchTimetables, fetchCourses, fetchInstructors, fetchRooms を useCallback でメモ化
   const fetchTimetables = useCallback(async () => {
@@ -179,12 +185,14 @@ export default function TimetableDashboard() {
         return;
       }
 
-      // user が admin 以外の場合、未許可ページへリダイレクト
-      if (user.role !== 'admin') {
+      // userがstudentの場合はアクセス権限がないため、unauthorizedページへリダイレクト
+      if (user.role === 'student') {
         console.warn("[Page] User is not admin. Redirecting to unauthorized.");
         router.push('/unauthorized');
         return;
       }
+
+      setAuthCheckComplete(true);
 
       // user が admin の場合にデータをフェッチ
       try {
@@ -568,786 +576,792 @@ export default function TimetableDashboard() {
       setLoading(false);
     }
   }
+
+  // 認証が完了していない場合は認証中と表示
+  if (!authCheckComplete) {
+    return <div>認証中...</div>;
+  }
+
   return (
-    <UserProvider>
-      <div>
-        <Head>
-          <title>Timetable Dashboard</title>
-          <meta name="description" content="時間割管理ツール" />
-        </Head>
-        <div className="flex flex-col min-h-screen">
-          <Header />
-          <main className="flex-1 p-6 bg-muted/40">
-            <div className="max-w-6xl mx-auto space-y-6">
-              <Tabs defaultValue="timetables">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="timetables">時間割</TabsTrigger>
-                  <TabsTrigger value="courses">授業</TabsTrigger>
-                  <TabsTrigger value="instructors">教員</TabsTrigger>
-                  <TabsTrigger value="rooms">教室</TabsTrigger>
-                </TabsList>
-                <TabsContent value="timetables">
-                  <div className="space-y-6">
-                    <h2 className="text-3xl font-bold tracking-tight">Your Timetables</h2>
-                    <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
-                      <Input
-                        className="flex-grow"
-                        placeholder="New Timetable Name"
-                        value={newTimetableName}
-                        onChange={(e) => setNewTimetableName(e.target.value)}
-                      />
-                      <div className="flex space-x-4">
-                        <Button className="w-40" onClick={createTimetable} disabled={loading}>
-                          {loading ? "Creating..." : "Create New Timetable"}
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button className="w-40" variant="destructive" onClick={() => setIsDeleteAll(true)} disabled={loading}>
-                              {loading ? "Deleting..." : "Delete All Timetables"}
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>全ての時間割を削除</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                本当に全ての時間割を削除してもよろしいですか？この操作は元に戻せません。
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => {
-                                  if (isDeleteAll) {
-                                    deleteAllTimetable()
-                                    setIsDeleteAll(false)
-                                  }
-                                }}
-                              >
-                                削除
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+      <UserProvider>
+        <div>
+          <Head>
+            <title>Timetable Dashboard</title>
+            <meta name="description" content="時間割管理ツール" />
+          </Head>
+          <div className="flex flex-col min-h-screen">
+            <Header />
+            <main className="flex-1 p-6 bg-muted/40">
+              <div className="max-w-6xl mx-auto space-y-6">
+                <Tabs defaultValue="timetables">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="timetables">時間割</TabsTrigger>
+                    <TabsTrigger value="courses">授業</TabsTrigger>
+                    <TabsTrigger value="instructors">教員</TabsTrigger>
+                    <TabsTrigger value="rooms">教室</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="timetables">
+                    <div className="space-y-6">
+                      <h2 className="text-3xl font-bold tracking-tight">Your Timetables</h2>
+                      <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                        <Input
+                          className="flex-grow"
+                          placeholder="New Timetable Name"
+                          value={newTimetableName}
+                          onChange={(e) => setNewTimetableName(e.target.value)}
+                        />
+                        <div className="flex space-x-4">
+                          <Button className="w-40" onClick={createTimetable} disabled={loading}>
+                            {loading ? "Creating..." : "Create New Timetable"}
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button className="w-40" variant="destructive" onClick={() => setIsDeleteAll(true)} disabled={loading}>
+                                {loading ? "Deleting..." : "Delete All Timetables"}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>全ての時間割を削除</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  本当に全ての時間割を削除してもよろしいですか？この操作は元に戻せません。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => {
+                                    if (isDeleteAll) {
+                                      deleteAllTimetable()
+                                      setIsDeleteAll(false)
+                                    }
+                                  }}
+                                >
+                                  削除
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                      {error && <div className="text-red-500">{error}</div>}
+                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {Array.isArray(timetables) && timetables.length > 0 ? (
+                          timetables.map((timetable: TimetableList) => (
+                            <Card key={timetable.id}>
+                              <CardHeader>
+                                <CardTitle>{timetable.id}</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="flex items-center text-sm text-muted-foreground">
+                                  <Clock className="w-4 h-4 mr-1" />
+                                </div>
+                              </CardContent>
+                              <CardFooter className="flex justify-between">
+                                <Button variant="outline" size="sm" onClick={() => handleEdit(timetable.id)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm" onClick={() => setSelectedTimetableId(timetable.id)}>
+                                      <Trash className="w-4 h-4 mr-2" />
+                                      Delete
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>削除の確認</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        本当にこの時間割を削除してもよろしいですか？
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => {
+                                          if (selectedTimetableId) {
+                                            deleteTimetable(selectedTimetableId)
+                                            setSelectedTimetableId(null)
+                                          }
+                                        }}
+                                      >
+                                        削除
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </CardFooter>
+                            </Card>
+                          ))
+                        ) : (
+                          <div className="text-center text-gray-500">作成した時間割がありません。</div>
+                        )}
                       </div>
                     </div>
-                    {error && <div className="text-red-500">{error}</div>}
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                      {Array.isArray(timetables) && timetables.length > 0 ? (
-                        timetables.map((timetable: TimetableList) => (
-                          <Card key={timetable.id}>
-                            <CardHeader>
-                              <CardTitle>{timetable.id}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Clock className="w-4 h-4 mr-1" />
+                  </TabsContent>
+                  <TabsContent value="courses">
+                    <Tabs defaultValue="add">
+                      <TabsList>
+                        <TabsTrigger value="add">新規授業作成</TabsTrigger>
+                        <TabsTrigger value="manage">授業一覧・管理</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="add">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>新規授業作成</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid w-full items-center gap-4">
+                              <div className="flex flex-col space-y-1.5">
+                                <Label htmlFor="courseName">授業名</Label>
+                                <Input
+                                  id="courseName"
+                                  value={currentCourse.name}
+                                  onChange={(e) => setCurrentCourse({ ...currentCourse, name: e.target.value })}
+                                />
                               </div>
-                            </CardContent>
-                            <CardFooter className="flex justify-between">
-                              <Button variant="outline" size="sm" onClick={() => handleEdit(timetable.id)}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm" onClick={() => setSelectedTimetableId(timetable.id)}>
-                                    <Trash className="w-4 h-4 mr-2" />
-                                    Delete
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>削除の確認</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      本当にこの時間割を削除してもよろしいですか？
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => {
-                                        if (selectedTimetableId) {
-                                          deleteTimetable(selectedTimetableId)
-                                          setSelectedTimetableId(null)
-                                        }
-                                      }}
-                                    >
-                                      削除
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </CardFooter>
-                          </Card>
-                        ))
-                      ) : (
-                        <div className="text-center text-gray-500">作成した時間割がありません。</div>
-                      )}
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="courses">
-                  <Tabs defaultValue="add">
-                    <TabsList>
-                      <TabsTrigger value="add">新規授業作成</TabsTrigger>
-                      <TabsTrigger value="manage">授業一覧・管理</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="add">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>新規授業作成</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid w-full items-center gap-4">
-                            <div className="flex flex-col space-y-1.5">
-                              <Label htmlFor="courseName">授業名</Label>
-                              <Input
-                                id="courseName"
-                                value={currentCourse.name}
-                                onChange={(e) => setCurrentCourse({ ...currentCourse, name: e.target.value })}
-                              />
-                            </div>
-                            <div className="flex flex-col space-y-1.5">
-                              <Label htmlFor="courseInstructors">担当教員</Label>
-                              <Input
-                                id="courseInstructors"
-                                value={currentCourse.instructors.join(', ')}
-                                onChange={(e) => setCurrentCourse({ ...currentCourse, instructors: e.target.value.split(', ') })}
-                              />
-                            </div>
-                            <div className="flex flex-col space-y-1.5">
-                              <Label htmlFor="courseTargets">対象クラス</Label>
-                              <Input
-                                id="courseTargets"
-                                value={currentCourse.targets.join(', ')}
-                                onChange={(e) => setCurrentCourse({ ...currentCourse, targets: e.target.value.split(', ') })}
-                              />
-                            </div>
-                            <div className="flex flex-col space-y-1.5">
-                              <Label htmlFor="courseRooms">教室</Label>
-                              <Input
-                                id="courseRooms"
-                                value={currentCourse.rooms.join(', ')}
-                                onChange={(e) => setCurrentCourse({ ...currentCourse, rooms: e.target.value.split(', ') })}
-                              />
-                            </div>
-                            <div className="flex flex-col space-y-1.5">
-                              <Label>時間割</Label>
-                              <div className="grid grid-cols-5 gap-2">
-                                {[1, 2, 3, 4, 5].map(day => (
-                                  <div key={day} className="flex flex-col items-center">
-                                    <span>Day {day}</span>
-                                    {[1, 2, 3, 4].map(period => (
-                                      <Checkbox
-                                        key={`${day}-${period}`}
-                                        checked={currentCourse.periods.some(p => p.day === day && p.period === period)}
-                                        onCheckedChange={() => togglePeriod(day, period, 'course')}
-                                      />
-                                    ))}
-                                  </div>
-                                ))}
+                              <div className="flex flex-col space-y-1.5">
+                                <Label htmlFor="courseInstructors">担当教員</Label>
+                                <Input
+                                  id="courseInstructors"
+                                  value={currentCourse.instructors.join(', ')}
+                                  onChange={(e) => setCurrentCourse({ ...currentCourse, instructors: e.target.value.split(', ') })}
+                                />
+                              </div>
+                              <div className="flex flex-col space-y-1.5">
+                                <Label htmlFor="courseTargets">対象クラス</Label>
+                                <Input
+                                  id="courseTargets"
+                                  value={currentCourse.targets.join(', ')}
+                                  onChange={(e) => setCurrentCourse({ ...currentCourse, targets: e.target.value.split(', ') })}
+                                />
+                              </div>
+                              <div className="flex flex-col space-y-1.5">
+                                <Label htmlFor="courseRooms">教室</Label>
+                                <Input
+                                  id="courseRooms"
+                                  value={currentCourse.rooms.join(', ')}
+                                  onChange={(e) => setCurrentCourse({ ...currentCourse, rooms: e.target.value.split(', ') })}
+                                />
+                              </div>
+                              <div className="flex flex-col space-y-1.5">
+                                <Label>時間割</Label>
+                                <div className="grid grid-cols-5 gap-2">
+                                  {[1, 2, 3, 4, 5].map(day => (
+                                    <div key={day} className="flex flex-col items-center">
+                                      <span>Day {day}</span>
+                                      {[1, 2, 3, 4].map(period => (
+                                        <Checkbox
+                                          key={`${day}-${period}`}
+                                          checked={currentCourse.periods.some(p => p.day === day && p.period === period)}
+                                          onCheckedChange={() => togglePeriod(day, period, 'course')}
+                                        />
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                        <CardFooter className="flex justify-between">
-                          <Button variant="outline" onClick={() => setCurrentCourse({
-                            name: '',
-                            instructors: [],
-                            targets: [],
-                            rooms: [],
-                            periods: []
-                          })}>
-                            クリア
-                          </Button>
-                          <Button onClick={createCourse}>作成</Button>
-                        </CardFooter>
-                      </Card>
-                    </TabsContent>
-                    <TabsContent value="manage">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>授業一覧・管理</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>授業名</TableHead>
-                                <TableHead>担当教員</TableHead>
-                                <TableHead>対象クラス</TableHead>
-                                <TableHead>教室</TableHead>
-                                <TableHead>編集</TableHead>
-                                <TableHead>削除</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {courses.length > 0 ? (
-                                courses.map((course, index) => (
-                                  <TableRow key={course.id || index}>
-                                    <TableCell>{course.name}</TableCell>
-                                    <TableCell>
-                                      {course.instructors ? course.instructors.join(', ') : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {course.targets && course.targets.length > 0 ? course.targets.join(', ') : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {course.rooms ? course.rooms.join(', ') : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {/* 編集ボタン */}
-                                      <Sheet>
-                                        <SheetTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setEditingCourse(course)} // Sheet展開時にデータを設定
-                                          >
-                                            <Edit className="w-4 h-4" />
-                                          </Button>
-                                        </SheetTrigger>
-                                        <SheetContent>
-                                          <SheetHeader>
-                                            <SheetTitle>授業の編集</SheetTitle>
-                                            <SheetDescription>授業の情報を編集します。</SheetDescription>
-                                          </SheetHeader>
-                                          {editingCourse && (
-                                            <div className="grid gap-4 py-4">
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="courseName" className="text-right">
-                                                  授業名
-                                                </Label>
-                                                <Input
-                                                  id="courseName"
-                                                  value={editingCourse.name}
-                                                  onChange={(e) =>
-                                                    setEditingCourse({ ...editingCourse, name: e.target.value })
-                                                  }
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="courseInstructors" className="text-right">
-                                                  担当教員
-                                                </Label>
-                                                <Input
-                                                  id="courseInstructors"
-                                                  value={editingCourse.instructors.join(', ')}
-                                                  onChange={(e) =>
-                                                    setEditingCourse({ ...editingCourse, instructors: e.target.value.split(', ') })
-                                                  }
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="courseTargets" className="text-right">
-                                                  対象クラス
-                                                </Label>
-                                                <Input
-                                                  id="courseTargets"
-                                                  value={editingCourse.targets.join(', ')}
-                                                  onChange={(e) =>
-                                                    setEditingCourse({ ...editingCourse, targets: e.target.value.split(', ') })
-                                                  }
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="courseRooms" className="text-right">
-                                                  教室
-                                                </Label>
-                                                <Input
-                                                  id="courseRooms"
-                                                  value={editingCourse.rooms.join(', ')}
-                                                  onChange={(e) =>
-                                                    setEditingCourse({ ...editingCourse, rooms: e.target.value.split(', ') })
-                                                  }
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label className="text-right">時間割</Label>
-                                                <div className="col-span-3 grid grid-cols-5 gap-2">
-                                                  {[1, 2, 3, 4, 5].map(day => (
-                                                    <div key={day} className="flex flex-col items-center">
-                                                      <span>Day {day}</span>
-                                                      {[1, 2, 3, 4].map(period => (
-                                                        <Checkbox
-                                                          key={`${day}-${period}`}
-                                                          checked={editingCourse.periods.some(p => p.day === day && p.period === period)}
-                                                          onCheckedChange={() => {
-                                                            const newPeriods = editingCourse.periods.some(p => p.day === day && p.period === period)
-                                                              ? editingCourse.periods.filter(p => !(p.day === day && p.period === period))
-                                                              : [...editingCourse.periods, { day, period }];
-                                                            setEditingCourse({ ...editingCourse, periods: newPeriods });
-                                                          }}
-                                                        />
-                                                      ))}
-                                                    </div>
-                                                  ))}
+                          </CardContent>
+                          <CardFooter className="flex justify-between">
+                            <Button variant="outline" onClick={() => setCurrentCourse({
+                              name: '',
+                              instructors: [],
+                              targets: [],
+                              rooms: [],
+                              periods: []
+                            })}>
+                              クリア
+                            </Button>
+                            <Button onClick={createCourse}>作成</Button>
+                          </CardFooter>
+                        </Card>
+                      </TabsContent>
+                      <TabsContent value="manage">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>授業一覧・管理</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>授業名</TableHead>
+                                  <TableHead>担当教員</TableHead>
+                                  <TableHead>対象クラス</TableHead>
+                                  <TableHead>教室</TableHead>
+                                  <TableHead>編集</TableHead>
+                                  <TableHead>削除</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {courses.length > 0 ? (
+                                  courses.map((course, index) => (
+                                    <TableRow key={course.id || index}>
+                                      <TableCell>{course.name}</TableCell>
+                                      <TableCell>
+                                        {course.instructors ? course.instructors.join(', ') : 'N/A'}
+                                      </TableCell>
+                                      <TableCell>
+                                        {course.targets && course.targets.length > 0 ? course.targets.join(', ') : 'N/A'}
+                                      </TableCell>
+                                      <TableCell>
+                                        {course.rooms ? course.rooms.join(', ') : 'N/A'}
+                                      </TableCell>
+                                      <TableCell>
+                                        {/* 編集ボタン */}
+                                        <Sheet>
+                                          <SheetTrigger asChild>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => setEditingCourse(course)} // Sheet展開時にデータを設定
+                                            >
+                                              <Edit className="w-4 h-4" />
+                                            </Button>
+                                          </SheetTrigger>
+                                          <SheetContent>
+                                            <SheetHeader>
+                                              <SheetTitle>授業の編集</SheetTitle>
+                                              <SheetDescription>授業の情報を編集します。</SheetDescription>
+                                            </SheetHeader>
+                                            {editingCourse && (
+                                              <div className="grid gap-4 py-4">
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="courseName" className="text-right">
+                                                    授業名
+                                                  </Label>
+                                                  <Input
+                                                    id="courseName"
+                                                    value={editingCourse.name}
+                                                    onChange={(e) =>
+                                                      setEditingCourse({ ...editingCourse, name: e.target.value })
+                                                    }
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="courseInstructors" className="text-right">
+                                                    担当教員
+                                                  </Label>
+                                                  <Input
+                                                    id="courseInstructors"
+                                                    value={editingCourse.instructors.join(', ')}
+                                                    onChange={(e) =>
+                                                      setEditingCourse({ ...editingCourse, instructors: e.target.value.split(', ') })
+                                                    }
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="courseTargets" className="text-right">
+                                                    対象クラス
+                                                  </Label>
+                                                  <Input
+                                                    id="courseTargets"
+                                                    value={editingCourse.targets.join(', ')}
+                                                    onChange={(e) =>
+                                                      setEditingCourse({ ...editingCourse, targets: e.target.value.split(', ') })
+                                                    }
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="courseRooms" className="text-right">
+                                                    教室
+                                                  </Label>
+                                                  <Input
+                                                    id="courseRooms"
+                                                    value={editingCourse.rooms.join(', ')}
+                                                    onChange={(e) =>
+                                                      setEditingCourse({ ...editingCourse, rooms: e.target.value.split(', ') })
+                                                    }
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label className="text-right">時間割</Label>
+                                                  <div className="col-span-3 grid grid-cols-5 gap-2">
+                                                    {[1, 2, 3, 4, 5].map(day => (
+                                                      <div key={day} className="flex flex-col items-center">
+                                                        <span>Day {day}</span>
+                                                        {[1, 2, 3, 4].map(period => (
+                                                          <Checkbox
+                                                            key={`${day}-${period}`}
+                                                            checked={editingCourse.periods.some(p => p.day === day && p.period === period)}
+                                                            onCheckedChange={() => {
+                                                              const newPeriods = editingCourse.periods.some(p => p.day === day && p.period === period)
+                                                                ? editingCourse.periods.filter(p => !(p.day === day && p.period === period))
+                                                                : [...editingCourse.periods, { day, period }];
+                                                              setEditingCourse({ ...editingCourse, periods: newPeriods });
+                                                            }}
+                                                          />
+                                                        ))}
+                                                      </div>
+                                                    ))}
+                                                  </div>
                                                 </div>
                                               </div>
-                                            </div>
-                                          )}
-                                          <SheetFooter>
-                                            <SheetClose asChild>
-                                              <Button type="submit" onClick={handleEditCourse}>保存</Button>
-                                            </SheetClose>
-                                            <Button variant="outline" onClick={() => setEditingCourse(null)}>キャンセル</Button>
-                                          </SheetFooter>
-                                        </SheetContent>
-                                      </Sheet>
-                                    </TableCell>
-                                    <TableCell>
-                                      {/* 削除ボタン */}
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button variant="destructive" size="sm">
-                                            <Trash className="w-4 h-4" />
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>授業の削除</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              本当にこの授業を削除してもよろしいですか？この操作は元に戻せません。
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                            <AlertDialogAction
+                                            )}
+                                            <SheetFooter>
+                                              <SheetClose asChild>
+                                                <Button type="submit" onClick={handleEditCourse}>保存</Button>
+                                              </SheetClose>
+                                              <Button variant="outline" onClick={() => setEditingCourse(null)}>キャンセル</Button>
+                                            </SheetFooter>
+                                          </SheetContent>
+                                        </Sheet>
+                                      </TableCell>
+                                      <TableCell>
+                                        {/* 削除ボタン */}
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="destructive" size="sm">
+                                              <Trash className="w-4 h-4" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>授業の削除</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                本当にこの授業を削除してもよろしいですか？この操作は元に戻せません。
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() => {
+                                                  if (course.name) {
+                                                    deleteCourse(course.name)
+                                                  }
+                                                }}
+                                              >
+                                                削除
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={6} className="text-center">登録された授業がありません。</TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
+                  </TabsContent>
+                  <TabsContent value="instructors">
+                    <Tabs defaultValue="add">
+                      <TabsList>
+                        <TabsTrigger value="add">新規教員追加</TabsTrigger>
+                        <TabsTrigger value="manage">教員一覧・管理</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="add">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>新規教員追加</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid w-full items-center gap-4">
+                              <div className="flex flex-col space-y-1.5">
+                                <Label htmlFor="instructorName">教員名</Label>
+                                <Input
+                                  id="instructorName"
+                                  value={currentInstructor.name}
+                                  onChange={(e) => setCurrentInstructor({ ...currentInstructor, name: e.target.value, id: e.target.value })}
+                                />
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="isFullTime"
+                                  checked={currentInstructor.isFullTime}
+                                  onCheckedChange={(checked) => setCurrentInstructor({ ...currentInstructor, isFullTime: checked as boolean })}
+                                />
+                                <label
+                                  htmlFor="isFullTime"
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  常勤
+                                </label>
+                              </div>
+                              <div className="flex flex-col space-y-1.5">
+                                <Label>利用可能な時間</Label>
+                                <div className="grid grid-cols-5 gap-2">
+                                  {[1, 2, 3, 4, 5].map(day => (
+                                    <div key={day} className="flex flex-col items-center">
+                                      <span>Day {day}</span>
+                                      {[1, 2, 3, 4].map(period => (
+                                        <Checkbox
+                                          key={`${day}-${period}`}
+                                          checked={currentInstructor.periods.some(p => p.day === day && p.period === period)}
+                                          onCheckedChange={() => togglePeriod(day, period, 'instructor')}
+                                        />
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                          <CardFooter className="flex justify-between">
+                            <Button variant="outline" onClick={() => setCurrentInstructor({
+                              id: '',
+                              name: '',
+                              isFullTime: true,
+                              periods: []
+                            })}>
+                              クリア
+                            </Button>
+                            <Button onClick={createInstructor}>教員を保存</Button>
+                          </CardFooter>
+                        </Card>
+                      </TabsContent>
+                      <TabsContent value="manage">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>教員一覧・管理</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>教員名</TableHead>
+                                  <TableHead>常勤</TableHead>
+                                  <TableHead>利用可能な時間</TableHead>
+                                  <TableHead>編集</TableHead>
+                                  <TableHead>削除</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {Array.isArray(instructors) && instructors.length > 0 ? (
+                                  instructors.map((instructor, index) => (
+                                    <TableRow key={`${instructor.id}-${index}`}>
+                                      <TableCell>{instructor.name}</TableCell>
+                                      <TableCell>{instructor.isFullTime ? 'はい' : 'いいえ'}</TableCell>
+                                      <TableCell>{instructor.periods.length} コマ</TableCell>
+                                      <TableCell>
+                                        {/* 編集ボタン */}
+                                        <Sheet>
+                                          <SheetTrigger asChild>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
                                               onClick={() => {
-                                                if (course.name) {
-                                                  deleteCourse(course.name)
-                                                }
+                                                setEditingInstructor(instructor);
+                                                setEditingInstructorId(instructor.id);
                                               }}
                                             >
-                                              削除
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
+                                              <Edit className="w-4 h-4" />
+                                            </Button>
+                                          </SheetTrigger>
+                                          <SheetContent>
+                                            <SheetHeader>
+                                              <SheetTitle>教員の編集</SheetTitle>
+                                              <SheetDescription>教員の情報を編集します。</SheetDescription>
+                                            </SheetHeader>
+                                            {editingInstructor && (
+                                              <div className="grid gap-4 py-4">
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="instructorName" className="text-right">
+                                                    教員名
+                                                  </Label>
+                                                  <Input
+                                                    id="instructorName"
+                                                    value={editingInstructor.name}
+                                                    onChange={(e) =>
+                                                      setEditingInstructor({ ...editingInstructor, name: e.target.value })
+                                                    }
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="isFullTime" className="text-right">
+                                                    常勤
+                                                  </Label>
+                                                  <Checkbox
+                                                    id="isFullTime"
+                                                    checked={editingInstructor.isFullTime}
+                                                    onCheckedChange={(checked) =>
+                                                      setEditingInstructor({ ...editingInstructor, isFullTime: checked as boolean })
+                                                    }
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label className="text-right">利用可能な時間</Label>
+                                                  <div className="col-span-3 grid grid-cols-5 gap-2">
+                                                    {[1, 2, 3, 4, 5].map(day => (
+                                                      <div key={day} className="flex flex-col items-center">
+                                                        <span>Day {day}</span>
+                                                        {[1, 2, 3, 4].map(period => (
+                                                          <Checkbox
+                                                            key={`${day}-${period}`}
+                                                            checked={editingInstructor.periods.some(p => p.day === day && p.period === period)}
+                                                            onCheckedChange={() => {
+                                                              const newPeriods = editingInstructor.periods.some(p => p.day === day && p.period === period)
+                                                                ? editingInstructor.periods.filter(p => !(p.day === day && p.period === period))
+                                                                : [...editingInstructor.periods, { day, period }];
+                                                              setEditingInstructor({ ...editingInstructor, periods: newPeriods });
+                                                            }}
+                                                          />
+                                                        ))}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                            <SheetFooter>
+                                              <SheetClose asChild>
+                                                <Button type="submit" onClick={handleEditInstructor}>保存</Button>
+                                              </SheetClose>
+                                              <Button variant="outline" onClick={() => setEditingInstructor(null)}>キャンセル</Button>
+                                            </SheetFooter>
+                                          </SheetContent>
+                                        </Sheet>
+                                      </TableCell>
+                                      <TableCell>
+                                        {/* 削除ボタン */}
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="destructive" size="sm">
+                                              <Trash className="w-4 h-4" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>教員の削除</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                本当にこの教員を削除してもよろしいですか？この操作は元に戻せません。
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                              <AlertDialogAction onClick={() => deleteInstructor(instructor.id)}>
+                                                削除
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="text-center">
+                                      登録された教員がありません。
                                     </TableCell>
                                   </TableRow>
-                                ))
-                              ) : (
-                                <TableRow>
-                                  <TableCell colSpan={6} className="text-center">登録された授業がありません。</TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                  </Tabs>
-                </TabsContent>
-                <TabsContent value="instructors">
-                  <Tabs defaultValue="add">
-                    <TabsList>
-                      <TabsTrigger value="add">新規教員追加</TabsTrigger>
-                      <TabsTrigger value="manage">教員一覧・管理</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="add">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>新規教員追加</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid w-full items-center gap-4">
-                            <div className="flex flex-col space-y-1.5">
-                              <Label htmlFor="instructorName">教員名</Label>
-                              <Input
-                                id="instructorName"
-                                value={currentInstructor.name}
-                                onChange={(e) => setCurrentInstructor({ ...currentInstructor, name: e.target.value, id: e.target.value })}
-                              />
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="isFullTime"
-                                checked={currentInstructor.isFullTime}
-                                onCheckedChange={(checked) => setCurrentInstructor({ ...currentInstructor, isFullTime: checked as boolean })}
-                              />
-                              <label
-                                htmlFor="isFullTime"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                              >
-                                常勤
-                              </label>
-                            </div>
-                            <div className="flex flex-col space-y-1.5">
-                              <Label>利用可能な時間</Label>
-                              <div className="grid grid-cols-5 gap-2">
-                                {[1, 2, 3, 4, 5].map(day => (
-                                  <div key={day} className="flex flex-col items-center">
-                                    <span>Day {day}</span>
-                                    {[1, 2, 3, 4].map(period => (
-                                      <Checkbox
-                                        key={`${day}-${period}`}
-                                        checked={currentInstructor.periods.some(p => p.day === day && p.period === period)}
-                                        onCheckedChange={() => togglePeriod(day, period, 'instructor')}
-                                      />
-                                    ))}
-                                  </div>
-                                ))}
+                                )}
+                              </TableBody>
+                            </Table>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                      <TabsContent value="rooms">
+                        <Tabs defaultValue="add">
+                          <TabsList>
+                            <TabsTrigger value="add">新規教室追加</TabsTrigger>
+                            <TabsTrigger value="manage">教室一覧・管理</TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      </TabsContent>
+                    </Tabs>
+                  </TabsContent>
+                  <TabsContent value="rooms">
+                    <Tabs defaultValue="add">
+                      <TabsList>
+                        <TabsTrigger value="add">新規教室追加</TabsTrigger>
+                        <TabsTrigger value="manage">教室一覧・管理</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="add">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>新規教室作成</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid w-full items-center gap-4">
+                              <div className="flex flex-col space-y-1.5">
+                                <Label htmlFor="roomName">教室名</Label>
+                                <Input
+                                  id="roomName"
+                                  value={currentRoom.name}
+                                  onChange={(e) => setCurrentRoom({ ...currentRoom, name: e.target.value })}
+                                />
+                              </div>
+                              <div className="flex flex-col space-y-1.5">
+                                <Label>使用する時間帯</Label>
+                                <div className="grid grid-cols-5 gap-2">
+                                  {[1, 2, 3, 4, 5].map(day => (
+                                    <div key={day} className="flex flex-col items-center">
+                                      <span>Day {day}</span>
+                                      {[1, 2, 3, 4].map(period => (
+                                        <Checkbox
+                                          key={`${day}-${period}`}
+                                          checked={currentRoom.unavailable.some(p => p.day === day && p.period === period)}
+                                          onCheckedChange={() => togglePeriod(day, period, 'room')}
+                                        />
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                        <CardFooter className="flex justify-between">
-                          <Button variant="outline" onClick={() => setCurrentInstructor({
-                            id: '',
-                            name: '',
-                            isFullTime: true,
-                            periods: []
-                          })}>
-                            クリア
-                          </Button>
-                          <Button onClick={createInstructor}>教員を保存</Button>
-                        </CardFooter>
-                      </Card>
-                    </TabsContent>
-                    <TabsContent value="manage">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>教員一覧・管理</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>教員名</TableHead>
-                                <TableHead>常勤</TableHead>
-                                <TableHead>利用可能な時間</TableHead>
-                                <TableHead>編集</TableHead>
-                                <TableHead>削除</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {Array.isArray(instructors) && instructors.length > 0 ? (
-                                instructors.map((instructor, index) => (
-                                  <TableRow key={`${instructor.id}-${index}`}>
-                                    <TableCell>{instructor.name}</TableCell>
-                                    <TableCell>{instructor.isFullTime ? 'はい' : 'いいえ'}</TableCell>
-                                    <TableCell>{instructor.periods.length} コマ</TableCell>
-                                    <TableCell>
+                          </CardContent>
+                          <CardFooter className="flex justify-between">
+                            <Button variant="outline" onClick={() => setCurrentRoom({
+                              name: '',
+                              unavailable: []
+                            })}>
+                              クリア
+                            </Button>
+                            <Button onClick={createRoom}>作成</Button>
+                          </CardFooter>
+                        </Card>
+                      </TabsContent>
+                      <TabsContent value="manage">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>教室一覧・管理</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>教室名</TableHead>
+                                  <TableHead>利用可能な時間</TableHead>
+                                  <TableHead>編集</TableHead>
+                                  <TableHead>削除</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {Array.isArray(rooms) && rooms.length > 0 ? (
+                                  rooms.map((room, index) => (
+                                    <TableRow key={`${room.name}-${index}`}>
+                                      <TableCell>{room.name}</TableCell>
+                                      <TableCell>{room.unavailable.length}</TableCell>
+
                                       {/* 編集ボタン */}
-                                      <Sheet>
-                                        <SheetTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                              setEditingInstructor(instructor);
-                                              setEditingInstructorId(instructor.id);
-                                            }}
-                                          >
-                                            <Edit className="w-4 h-4" />
-                                          </Button>
-                                        </SheetTrigger>
-                                        <SheetContent>
-                                          <SheetHeader>
-                                            <SheetTitle>教員の編集</SheetTitle>
-                                            <SheetDescription>教員の情報を編集します。</SheetDescription>
-                                          </SheetHeader>
-                                          {editingInstructor && (
-                                            <div className="grid gap-4 py-4">
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="instructorName" className="text-right">
-                                                  教員名
-                                                </Label>
-                                                <Input
-                                                  id="instructorName"
-                                                  value={editingInstructor.name}
-                                                  onChange={(e) =>
-                                                    setEditingInstructor({ ...editingInstructor, name: e.target.value })
-                                                  }
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="isFullTime" className="text-right">
-                                                  常勤
-                                                </Label>
-                                                <Checkbox
-                                                  id="isFullTime"
-                                                  checked={editingInstructor.isFullTime}
-                                                  onCheckedChange={(checked) =>
-                                                    setEditingInstructor({ ...editingInstructor, isFullTime: checked as boolean })
-                                                  }
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label className="text-right">利用可能な時間</Label>
-                                                <div className="col-span-3 grid grid-cols-5 gap-2">
-                                                  {[1, 2, 3, 4, 5].map(day => (
-                                                    <div key={day} className="flex flex-col items-center">
-                                                      <span>Day {day}</span>
-                                                      {[1, 2, 3, 4].map(period => (
-                                                        <Checkbox
-                                                          key={`${day}-${period}`}
-                                                          checked={editingInstructor.periods.some(p => p.day === day && p.period === period)}
-                                                          onCheckedChange={() => {
-                                                            const newPeriods = editingInstructor.periods.some(p => p.day === day && p.period === period)
-                                                              ? editingInstructor.periods.filter(p => !(p.day === day && p.period === period))
-                                                              : [...editingInstructor.periods, { day, period }];
-                                                            setEditingInstructor({ ...editingInstructor, periods: newPeriods });
-                                                          }}
-                                                        />
-                                                      ))}
-                                                    </div>
-                                                  ))}
+                                      <TableCell>
+                                        <Sheet>
+                                          <SheetTrigger asChild>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => {
+                                                setEditingRoom(room);
+                                                setEditingRoomId(room.name);
+                                              }}
+                                            >
+                                              <Edit className="w-4 h-4" />
+                                            </Button>
+                                          </SheetTrigger>
+                                          <SheetContent>
+                                            <SheetHeader>
+                                              <SheetTitle>教室の編集</SheetTitle>
+                                              <SheetDescription>教室の情報を編集します</SheetDescription>
+                                            </SheetHeader>
+                                            {editingRoom && (
+                                              <div className="grid gap--4 py-4">
+                                                <div className="ggrid grid-cols-4 items-center gap-4">
+                                                  <Label htmlFor="roomName" className="text-right">
+                                                    教室名
+                                                  </Label>
+                                                  <Input
+                                                    id="roomName"
+                                                    value={editingRoom.name}
+                                                    onChange={(e) =>
+                                                      setEditingRoom({ ...editingRoom, name: e.target.value })}
+                                                    className="col-span-3"
+                                                  />
+                                                </div>
+                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                  <Label className="text-right">使用する時間帯</Label>
+                                                  <div className="col-span-3 grid grid-cols-5 gap-2">
+                                                    {[1, 2, 3, 4, 5].map(day => (
+                                                      <div key={day} className="flex flex-col items-center">
+                                                        <span>Day {day}</span>
+                                                        {[1, 2, 3, 4].map(period => (
+                                                          <Checkbox
+                                                            key={`${day}-${period}`}
+                                                            checked={editingRoom.unavailable.some(p => p.day === day && p.period === period)}
+                                                            onCheckedChange={() => {
+                                                              const newPeriods = editingRoom.unavailable.some(p => p.day === day && p.period === period)
+                                                                ? editingRoom.unavailable.filter(p => !(p.day === day && p.period === period))
+                                                                : [...editingRoom.unavailable, { day, period }];
+                                                              setEditingRoom({ ...editingRoom, unavailable: newPeriods });
+                                                            }}
+                                                          />
+                                                        ))}
+                                                      </div>
+                                                    ))}
+                                                  </div>
                                                 </div>
                                               </div>
-                                            </div>
-                                          )}
-                                          <SheetFooter>
-                                            <SheetClose asChild>
-                                              <Button type="submit" onClick={handleEditInstructor}>保存</Button>
-                                            </SheetClose>
-                                            <Button variant="outline" onClick={() => setEditingInstructor(null)}>キャンセル</Button>
-                                          </SheetFooter>
-                                        </SheetContent>
-                                      </Sheet>
-                                    </TableCell>
-                                    <TableCell>
+                                            )}
+                                            <SheetFooter>
+                                              <SheetClose asChild>
+                                                <Button type="submit" onClick={handleEditRoom}>保存</Button>
+                                              </SheetClose>
+                                              <Button variant="outline" onClick={() => setEditingRoom(null)}>キャンセル</Button>
+                                            </SheetFooter>
+                                          </SheetContent>
+                                        </Sheet>
+                                      </TableCell>
+
                                       {/* 削除ボタン */}
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button variant="destructive" size="sm">
-                                            <Trash className="w-4 h-4" />
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>教員の削除</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              本当にこの教員を削除してもよろしいですか？この操作は元に戻せません。
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => deleteInstructor(instructor.id)}>
-                                              削除
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
+                                      <TableCell>
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="destructive" size="sm">
+                                              <Trash className="w-4 h-4" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>教室の削除</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                本当にこの教室を削除してもよろしいですか？この操作は元に戻せません。
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                              <AlertDialogAction onClick={() => deleteRoom(room.name)}>
+                                                削除
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={4} className="text-center">
+                                      登録された教室がありません。
                                     </TableCell>
                                   </TableRow>
-                                ))
-                              ) : (
-                                <TableRow>
-                                  <TableCell colSpan={5} className="text-center">
-                                    登録された教員がありません。
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                    <TabsContent value="rooms">
-                      <Tabs defaultValue="add">
-                        <TabsList>
-                          <TabsTrigger value="add">新規教室追加</TabsTrigger>
-                          <TabsTrigger value="manage">教室一覧・管理</TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                    </TabsContent>
-                  </Tabs>
-                </TabsContent>
-                <TabsContent value="rooms">
-                  <Tabs defaultValue="add">
-                    <TabsList>
-                      <TabsTrigger value="add">新規教室追加</TabsTrigger>
-                      <TabsTrigger value="manage">教室一覧・管理</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="add">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>新規教室作成</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid w-full items-center gap-4">
-                            <div className="flex flex-col space-y-1.5">
-                              <Label htmlFor="roomName">教室名</Label>
-                              <Input
-                                id="roomName"
-                                value={currentRoom.name}
-                                onChange={(e) => setCurrentRoom({ ...currentRoom, name: e.target.value })}
-                              />
-                            </div>
-                            <div className="flex flex-col space-y-1.5">
-                              <Label>使用する時間帯</Label>
-                              <div className="grid grid-cols-5 gap-2">
-                                {[1, 2, 3, 4, 5].map(day => (
-                                  <div key={day} className="flex flex-col items-center">
-                                    <span>Day {day}</span>
-                                    {[1, 2, 3, 4].map(period => (
-                                      <Checkbox
-                                        key={`${day}-${period}`}
-                                        checked={currentRoom.unavailable.some(p => p.day === day && p.period === period)}
-                                        onCheckedChange={() => togglePeriod(day, period, 'room')}
-                                      />
-                                    ))}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                        <CardFooter className="flex justify-between">
-                          <Button variant="outline" onClick={() => setCurrentRoom({
-                            name: '',
-                            unavailable: []
-                          })}>
-                            クリア
-                          </Button>
-                          <Button onClick={createRoom}>作成</Button>
-                        </CardFooter>
-                      </Card>
-                    </TabsContent>
-                    <TabsContent value="manage">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>教室一覧・管理</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>教室名</TableHead>
-                                <TableHead>利用可能な時間</TableHead>
-                                <TableHead>編集</TableHead>
-                                <TableHead>削除</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {Array.isArray(rooms) && rooms.length > 0 ? (
-                                rooms.map((room, index) => (
-                                  <TableRow key={`${room.name}-${index}`}>
-                                    <TableCell>{room.name}</TableCell>
-                                    <TableCell>{room.unavailable.length}</TableCell>
-
-                                    {/* 編集ボタン */}
-                                    <TableCell>
-                                      <Sheet>
-                                        <SheetTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                              setEditingRoom(room);
-                                              setEditingRoomId(room.name);
-                                            }}
-                                          >
-                                            <Edit className="w-4 h-4" />
-                                          </Button>
-                                        </SheetTrigger>
-                                        <SheetContent>
-                                          <SheetHeader>
-                                            <SheetTitle>教室の編集</SheetTitle>
-                                            <SheetDescription>教室の情報を編集します</SheetDescription>
-                                          </SheetHeader>
-                                          {editingRoom && (
-                                            <div className="grid gap--4 py-4">
-                                              <div className="ggrid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="roomName" className="text-right">
-                                                  教室名
-                                                </Label>
-                                                <Input
-                                                  id="roomName"
-                                                  value={editingRoom.name}
-                                                  onChange={(e) =>
-                                                    setEditingRoom({ ...editingRoom, name: e.target.value })}
-                                                  className="col-span-3"
-                                                />
-                                              </div>
-                                              <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label className="text-right">使用する時間帯</Label>
-                                                <div className="col-span-3 grid grid-cols-5 gap-2">
-                                                  {[1, 2, 3, 4, 5].map(day => (
-                                                    <div key={day} className="flex flex-col items-center">
-                                                      <span>Day {day}</span>
-                                                      {[1, 2, 3, 4].map(period => (
-                                                        <Checkbox
-                                                          key={`${day}-${period}`}
-                                                          checked={editingRoom.unavailable.some(p => p.day === day && p.period === period)}
-                                                          onCheckedChange={() => {
-                                                            const newPeriods = editingRoom.unavailable.some(p => p.day === day && p.period === period)
-                                                              ? editingRoom.unavailable.filter(p => !(p.day === day && p.period === period))
-                                                              : [...editingRoom.unavailable, { day, period }];
-                                                            setEditingRoom({ ...editingRoom, unavailable: newPeriods });
-                                                          }}
-                                                        />
-                                                      ))}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          )}
-                                          <SheetFooter>
-                                            <SheetClose asChild>
-                                              <Button type="submit" onClick={handleEditRoom}>保存</Button>
-                                            </SheetClose>
-                                            <Button variant="outline" onClick={() => setEditingRoom(null)}>キャンセル</Button>
-                                          </SheetFooter>
-                                        </SheetContent>
-                                      </Sheet>
-                                    </TableCell>
-
-                                    {/* 削除ボタン */}
-                                    <TableCell>
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button variant="destructive" size="sm">
-                                            <Trash className="w-4 h-4" />
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>教室の削除</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              本当にこの教室を削除してもよろしいですか？この操作は元に戻せません。
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => deleteRoom(room.name)}>
-                                              削除
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
-                                    </TableCell>
-                                  </TableRow>
-                                ))
-                              ) : (
-                                <TableRow>
-                                  <TableCell colSpan={4} className="text-center">
-                                    登録された教室がありません。
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                  </Tabs>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </main>
-          <Toaster />
+                                )}
+                              </TableBody>
+                            </Table>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </main>
+            <Toaster />
+          </div>
         </div>
-      </div>
-    </UserProvider>
+      </UserProvider>
   )
 }

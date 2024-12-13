@@ -1,10 +1,15 @@
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+'use client';
 
+import { ArrowLeft } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function Unauthorized() {
+    const router = useRouter()
+    const handleTop = () => {
+        router.push('/')
+    }
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-red-50 to-red-100 p-4">
             <Card className="w-full max-w-md">
@@ -16,11 +21,15 @@ export default function Unauthorized() {
                     <p className='text-center text-gray-600'>必要な権限がない可能性があります。</p>
                 </CardContent>
                 <CardFooter className="flex justify-center">
-                    <Button asChild variant="outline">
-                        <Link href="/" className="inline-flex items-center">
+                    <Button
+                        asChild
+                        variant="outline"
+                        onClick={handleTop}
+                    >
+                        <span className="flex items-center">
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             ホームに戻る
-                        </Link>
+                        </span>
                     </Button>
                 </CardFooter>
             </Card>

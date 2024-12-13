@@ -1,13 +1,12 @@
 "use client";
 
-//import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useUser } from '@/context/UserContext';
 import axios from 'axios';
 import _ from 'lodash';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from "@/components/ui/card";
 import {
     Dialog,
@@ -29,6 +28,7 @@ import {
 import { toast } from 'react-hot-toast';
 import Head from 'next/head';
 import Header from '@/components/Header';
+import { useTimetable } from '@/context/TimetableContext';
 import {
     ClassEntry,
     TimetableDay,
@@ -43,6 +43,7 @@ const ClassCard: React.FC<{
 }> = ({ entry, isSelected, isEmpty, onDoubleClick }) => {
     return (
         <Card
+            draggable="true"
             onDoubleClick={onDoubleClick}
             className="cursor-pointer"
             style={{
@@ -83,31 +84,59 @@ const EditTimetable = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
-    // 
+    //
     const [timetable, setTimetable] = useState<Timetable | null>(null);
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(true);
     // const [selectedTeacher, setSelectedTeacher] = useState<string>("");  // 未使用の変数をコメントアウト
     // const [filterMode, setFilterMode] = useState<boolean>(false);  // 未使用の変数をコメントアウト
     const [selectedClass, setSelectedClass] = useState<{ day: string, classLabel: string, period: number } | null>(null);
+    const { user, isUserLoading } = useUser();
+    const [authCheckComplete, setAuthCheckComplete] = useState(false); // 認証チェックが完了したかどうかのフラグ
+    const { editingTimetableId } = useTimetable();
+
     // Fetch timetable data
     useEffect(() => {
         const fetchTimetable = async () => {
-            if (!id) return;
+            const timetableId = editingTimetableId;
+            console.log("Editing timetable ID:", timetableId);
+            if (!timetableId) {
+                toast.error("時間割が選択されていません。");
+                console.log(" IDが見つかりません")
+                router.push('/dashboard');
+                return;
+            }
+
+            if (isUserLoading) return;
+
+            if (!user) {
+                toast.error("ログインが必要です。");
+                router.push('/login');
+                return;
+            }
+
+            if (user.role !== "admin") {
+                toast.error("権限がありません。");
+                router.push('/unauthorized');
+                return;
+            }
+
+            setAuthCheckComplete(true);
+
             try {
-                const response = await axios.get(`http://localhost:3001/api/timetable/get/${id}`);
+                const response = await axios.get(`http://localhost:3001/api/timetable/get/${timetableId}`);
                 setTimetable(response.data);
-                console.log(response.data);
                 setNewName(response.data.name);
-                setLoading(false);
             } catch (error) {
                 toast.error("時間割の取得に失敗しました。");
                 console.error('Error fetching timetable:', error);
+            } finally {
                 setLoading(false);
             }
         };
+
         fetchTimetable();
-    }, [id]);
+    }, [user, isUserLoading, router, editingTimetableId, id]);
 
     // Handle class selection and swapping
     const handleClassDoubleClick = useCallback(
@@ -223,7 +252,8 @@ const EditTimetable = () => {
         return timetableByClasses;
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (!authCheckComplete) return <div>認証中...</div>; // 認証チェックが終わるまでローディング表示
+    if (loading) return <div>Loading...</div>; // 認証チェックが終わった後、通常のローディング表示
 
     const timetableByClasses = timetable?.Days ? generateTimetableByClasses(timetable.Days) : {};
 
@@ -235,10 +265,10 @@ const EditTimetable = () => {
             <Header />
             {timetable && (
                 <div style={{ padding: '30px', marginBottom: '20px' }}> {/* 下部に余白を追加 */}
-                {/* Dialog for updating timetable name */}
+                    {/* Dialog for updating timetable name */}
                     <Dialog>
                         <DialogTrigger asChild>
-                        <Button style={{ marginBottom: '20px' }}>時間割名を編集</Button>
+                            <Button style={{ marginBottom: '20px' }}>時間割名を編集</Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
@@ -256,81 +286,77 @@ const EditTimetable = () => {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
-
-                    {/* Scrollable Table */}
-                    <ScrollArea style={{ height: '80vh', width: '100%' }}>
-                        <Table style={{
-                            borderCollapse: 'collapse',
-                            width: '100%',
-                            border: '2px solid #000',
-                            marginLeft: '80px',
-                            marginRight: '80px'
-                        }}>
-                            <TableHeader>
-                                <TableRow style={{ borderBottom: '2px solid #000' }}>
-                                    <TableHead style={{
+                    <Table style={{
+                        borderCollapse: 'collapse',
+                        width: '100%',
+                        border: '2px solid #000',
+                        marginLeft: '80px',
+                        marginRight: '80px',
+                    }}>
+                        <TableHeader>
+                            <TableRow style={{ borderBottom: '2px solid #000' }}>
+                                <TableHead style={{
+                                    borderRight: '1px solid #000',
+                                    borderBottom: '1px solid #000',
+                                    padding: '15px'
+                                }}>クラス</TableHead>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
+                                    <TableHead key={day} style={{
+                                        borderLeft: '1px solid #000',
+                                        borderBottom: '1px solid #000',
+                                        padding: '10px',
+                                        textAlign: 'center'
+                                    }}>{day}</TableHead>
+                                ))}
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {['ME1', 'IE1', 'CA1', 'ME2', 'IE2', 'CA2', 'ME3', 'IE3', 'CA3', 'ME4', 'IE4', 'CA4', 'ME5', 'IE5', 'CA5'].map(classLabel => (
+                                <TableRow key={classLabel} style={{ borderBottom: '1px solid #000' }}>
+                                    <TableCell style={{
                                         borderRight: '1px solid #000',
                                         borderBottom: '1px solid #000',
-                                        padding: '15px'
-                                    }}>クラス</TableHead>
+                                        padding: '10px',
+                                        fontWeight: 'bold',
+                                        textAlign: 'center'
+                                    }}>
+                                        {classLabel}
+                                    </TableCell>
                                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
-                                        <TableHead key={day} style={{
-                                            borderLeft: '1px solid #000',
-                                            borderBottom: '1px solid #000',
-                                            padding: '10px',
-                                            textAlign: 'center'
-                                        }}>{day}</TableHead>
+                                        <TableCell
+                                            key={day}
+                                            style={{
+                                                border: '1px solid #000',
+                                                wordBreak: 'break-word',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                padding: '10px',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start', flexWrap: 'nowrap' }}>
+                                                {timetableByClasses[classLabel][day]?.map((entry, index) => {
+                                                    const period = entry?.periods.period ?? index; // entryが存在しない場合はindexを使用
+                                                    return (
+                                                        <ClassCard
+                                                            key={index}
+                                                            entry={entry || undefined}
+                                                            isSelected={
+                                                                selectedClass?.day === day &&
+                                                                selectedClass?.classLabel === classLabel &&
+                                                                selectedClass?.period === period
+                                                            }
+                                                            isEmpty={!entry}
+                                                            onDoubleClick={() => handleClassDoubleClick(day, classLabel, period)}
+                                                        />
+                                                    );
+                                                })}
+                                            </div>
+                                        </TableCell>
                                     ))}
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {['ME1', 'IE1', 'CA1', 'ME2', 'IE2', 'CA2', 'ME3', 'IE3', 'CA3', 'ME4', 'IE4', 'CA4', 'ME5', 'IE5', 'CA5'].map(classLabel => (
-                                    <TableRow key={classLabel} style={{ borderBottom: '1px solid #000' }}>
-                                        <TableCell style={{
-                                            borderRight: '1px solid #000',
-                                            borderBottom: '1px solid #000',
-                                            padding: '10px',
-                                            fontWeight: 'bold',
-                                            textAlign: 'center'
-                                        }}>
-                                            {classLabel}
-                                        </TableCell>
-                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
-                                            <TableCell
-                                                key={day}
-                                                style={{
-                                                    border: '1px solid #000',
-                                                    wordBreak: 'break-word',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    padding: '10px',
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start', flexWrap: 'nowrap' }}>
-                                                    {timetableByClasses[classLabel][day]?.map((entry, index) => {
-                                                        const period = entry?.periods.period ?? index; // entryが存在しない場合はindexを使用
-                                                        return (
-                                                            <ClassCard
-                                                                key={index}
-                                                                entry={entry || undefined}
-                                                                isSelected={
-                                                                    selectedClass?.day === day &&
-                                                                    selectedClass?.classLabel === classLabel &&
-                                                                    selectedClass?.period === period
-                                                                }
-                                                                isEmpty={!entry}
-                                                                onDoubleClick={() => handleClassDoubleClick(day, classLabel, period)}
-                                                            />
-                                                        );
-                                                    })}
-                                                </div>
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </ScrollArea>
+                            ))}
+                        </TableBody>
+                    </Table>
                 </div>
             )}
         </div>
@@ -341,7 +367,7 @@ const EditTimetable = () => {
 export default function PageWrapper() {
     return (
         <Suspense fallback={<div>Loading...</div>}>
-            <EditTimetable />
+                <EditTimetable />
         </Suspense>
     );
 }

@@ -1,29 +1,39 @@
-import { useRouter } from 'next/navigation';
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
 
 export function Header() {
-    const router = useRouter();
+    const router = useRouter()
+    const [profileOpen, setProfileOpen] = useState(false)
 
-    // ダッシュボードへの遷移
     const handleDashboard = () => {
-        router.push('/dashboard');
+        router.push('/dashboard')
     }
 
-    // 設定画面への遷移
     const handleSetting = () => {
-        router.push('/setting');
+        router.push('/setting')
     }
 
-    // プロフィール画面への遷移
     const handleProfile = () => {
-        router.push('/profile');
+        router.push('/profile')
+        setProfileOpen(false)
+    }
+
+    const handleLogout = () => {
+        // Add any logout logic here (e.g., clearing tokens, etc.)
+        router.push('/login')
+        setProfileOpen(false)
     }
 
     return (
         <header className="flex items-center justify-between px-6 py-4 bg-background border-b">
-            {/* ホームへのリンク */}
             <button
                 onClick={() => router.push('/')}
                 className="text-2xl font-bold hover:underline"
+                aria-label="Go to home page"
             >
                 Clauto
             </button>
@@ -40,15 +50,36 @@ export function Header() {
                 >
                     Setting
                 </button>
-                <button
-                    onClick={handleProfile}
-                    className="text-sm font-medium hover:underline"
-                >
-                    Profile
-                </button>
+                <Sheet open={profileOpen} onOpenChange={setProfileOpen}>
+                    <SheetTrigger asChild>
+                        <button className="text-sm font-medium hover:underline">
+                            Profile
+                        </button>
+                    </SheetTrigger>
+                    <SheetContent>
+                        <div className="flex flex-col space-y-4 mt-6">
+                            <h2 className="text-lg font-semibold">Profile Options</h2>
+                            <Button
+                                onClick={handleProfile}
+                                variant="outline"
+                                className="w-full justify-start"
+                            >
+                                View Profile
+                            </Button>
+                            <Button
+                                onClick={handleLogout}
+                                variant="outline"
+                                className="w-full justify-start"
+                            >
+                                Logout
+                            </Button>
+                        </div>
+                    </SheetContent>
+                </Sheet>
             </nav>
         </header>
-    );
+    )
 }
 
-export default Header;
+export default Header
+

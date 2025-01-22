@@ -6,6 +6,7 @@ export interface Course {
     credits: number;
     periods: Period[];
     targets: string[];
+    length: number;
 }
 export interface TimetableList {
     id: string;
@@ -24,6 +25,7 @@ export interface ClassEntry {
     Rooms: string[];
     periods: Period;
     Targets: string[];
+    length: number;
 }
 
 export interface TimetableDay {

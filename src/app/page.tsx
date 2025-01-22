@@ -103,6 +103,7 @@ const getTeachingInstructorsForCurrentPeriod = (
         Rooms: cls.Rooms || [],
         periods: cls.periods || { day: currentDay, period: currentPeriod },
         Targets: cls.Targets || [],
+        length: cls.length || 0,
     }));
 
 
@@ -515,7 +516,6 @@ const HomePage = () => {
                                 </CardContent>
                             </Card>
 
-                            {/* 空いている教室 */}
                             {/* 空いている教室 */}
                             <Card className="w-full">
                                 <CardHeader className="flex items-center justify-between">

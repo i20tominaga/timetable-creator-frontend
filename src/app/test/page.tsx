@@ -189,6 +189,7 @@ const EditTimetable = () => {
                                 day: dayToNumber[selectedClass.day] ?? 0,  // dayを付与
                             },
                             Targets: [selectedClass.classLabel],
+                            length: 0
                         };
 
                     const classEntry2: ClassEntry = classIndex2 !== -1
@@ -202,6 +203,7 @@ const EditTimetable = () => {
                                 day: dayToNumber[day] ?? 0,  // dayを付与
                             },
                             Targets: [classLabel],
+                            length: 0
                         };
 
                     console.log("Swapping classes:", {
@@ -290,6 +292,7 @@ const EditTimetable = () => {
                             day: dayToNumber[day] ?? 0  // 日付を曜日からマッピング
                         },
                         Targets: [classLabel],
+                        length: 2
                     };
                 });
             }
